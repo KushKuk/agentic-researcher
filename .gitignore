@@ -1,0 +1,65 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+venv/
+.env/
+.envrc
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# API Keys / Secrets
+# =========================
+config/secrets.py
+.env.local
+
+# =========================
+# Data & Memory (AI)
+# =========================
+data/
+memory/
+*.faiss
+*.index
+*.db
+*.sqlite3
+*.jsonl
+
+# =========================
+# Playwright / Browser
+# =========================
+playwright-report/
+test-results/
+
+# =========================
+# Model Files
+# =========================
+models/
+*.pt
+*.bin
+*.ckpt
+
+# =========================
+# Build / Cache
+# =========================
+.cache/
+dist/
+build/
