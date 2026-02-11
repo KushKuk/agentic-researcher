@@ -1,17 +1,17 @@
-from tools.research_search import search_papers
+from pipelines.research_pipeline import run_pipeline
 
 class PlannerAgent:
 
     def run(self, topic: str):
 
         plan = [
-            "search_papers"
+            "research_pipeline"
         ]
 
         results = {}
 
         for step in plan:
-            if step == "search_papers":
-                results["papers"] = search_papers(topic)
+            if step == "research_pipeline":
+                results = run_pipeline(topic)
 
         return results

@@ -38,9 +38,10 @@ Agents make decisions and control execution flow.
 
 Current Agents:
 - Planner Agent
+- Summarizer Agent
 
 Future Agents:
-- Summarizer Agent
+
 - Outreach Agent
 - Self-Critique Agent
 
