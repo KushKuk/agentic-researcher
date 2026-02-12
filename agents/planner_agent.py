@@ -1,4 +1,4 @@
-from agents.state import AgentState
+from core.execution_state import AgentState
 from core.execution_engine import ExecutionEngine
 from agents.llm_planner import LLMPlanner
 from pipelines.research_pipeline import run_pipeline

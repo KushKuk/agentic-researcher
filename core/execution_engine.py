@@ -1,22 +1,32 @@
-class ExecutionEngine:
+from core.execution_state import ExecutionState
+from core.pipeline_loader import load_pipeline
+from core.stage_runner import execute_stage
 
-    def execute(self, plan, state, pipeline_map):
 
-        for step in plan:
+def run(topic: str):
+    """
+    Runs the full agentic research pipeline.
 
-            if step not in pipeline_map:
-                state.log_error(f"Unknown step: {step}")
-                continue
+    Args:
+        topic (str): research topic provided by user
 
-            try:
-                state.log_reasoning(f"Executing step: {step}")
+    Returns:
+        dict: structured execution results
+    """
 
-                result = pipeline_map[step](state.topic)
+    print("[ExecutionEngine] Starting pipeline execution")
 
-                state.add_result(step, result)
-                state.add_step(step)
+    # Load pipeline definition
+    pipeline = load_pipeline()
 
-            except Exception as e:
-                state.log_error(str(e))
+    # Initialize execution state
+    state = ExecutionState(topic)
 
-        return state
+    # Execute each stage in order
+    for stage in pipeline:
+        state = execute_stage(stage, state)
+
+    print("[ExecutionEngine] Pipeline execution complete")
+
+    # Return final structured results
+    return state.to_dict()
