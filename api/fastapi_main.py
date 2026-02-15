@@ -5,9 +5,11 @@ Provides REST API endpoints for triggering research workflows.
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Any
-from pipelines import ResearchPipeline, PaperSummarizationPipeline
-from config import settings
+from typing import Dict, Any, Optional
+from pipelines.research_pipeline import ResearchPipeline
+from pipelines.paper_summarization_pipeline import PaperSummarizationPipeline
+from pipelines.advanced_research_pipeline import AdvancedResearchPipeline, AdaptiveResearchPipeline
+from config.config_settings import settings
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -74,22 +76,74 @@ class PaperSummarizationResponse(BaseModel):
     errors: list = []
 
 
+class AdvancedResearchRequest(BaseModel):
+    """Request model for advanced research."""
+    task: str
+    max_steps: int = 15
+    enable_reflection: bool = True
+    context: Dict[str, Any] = {}
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task": "Analyze recent advances in retrieval augmented generation",
+                "max_steps": 15,
+                "enable_reflection": True,
+                "context": {"focus": "practical applications"}
+            }
+        }
+
+
+class AdvancedResearchResponse(BaseModel):
+    """Response model for advanced research."""
+    success: bool
+    task: str
+    steps: int
+    final_output: Any
+    error: str = ""
+    execution_time_seconds: float
+    reflection: Optional[Dict[str, Any]] = None
+    reasoning_history: list = []
+
+
+class AdaptiveResearchRequest(BaseModel):
+    """Request model for adaptive research."""
+    task: str
+    strategy: str = "auto"  # auto, simple, sequential, advanced
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task": "Find and compare papers on attention mechanisms",
+                "strategy": "auto"
+            }
+        }
+
+
 # Endpoints
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
     return {
         "name": "Agentic Research System",
-        "version": "0.2.0",
-        "phase": "Phase 2 - Paper Summarization",
+        "version": "0.3.0",
+        "phase": "Phase 3 - Advanced LLM Planner",
         "status": "running",
         "endpoints": {
             "research": "/api/research",
             "summarize": "/api/summarize",
             "summarize_url": "/api/summarize-url",
+            "advanced_research": "/api/advanced-research",
+            "adaptive_research": "/api/adaptive-research",
             "health": "/health",
             "tools": "/api/tools",
             "docs": "/docs"
+        },
+        "features": {
+            "multi_step_reasoning": True,
+            "error_recovery": True,
+            "self_reflection": True,
+            "parallel_execution": "experimental"
         }
     }
 
@@ -217,11 +271,83 @@ async def summarize_from_url(pdf_url: str, title: str = "Unknown"):
         )
 
 
+@app.post("/api/advanced-research", response_model=AdvancedResearchResponse)
+async def execute_advanced_research(request: AdvancedResearchRequest):
+    """
+    Execute advanced research with multi-step reasoning and reflection.
+    
+    Args:
+        request: Advanced research request
+        
+    Returns:
+        Enhanced research results with reasoning history
+    """
+    try:
+        # Initialize advanced pipeline
+        pipeline = AdvancedResearchPipeline(
+            max_steps=request.max_steps,
+            enable_reflection=request.enable_reflection
+        )
+        
+        # Execute with context
+        result = await pipeline.run(
+            task=request.task,
+            context=request.context
+        )
+        
+        return AdvancedResearchResponse(
+            success=result["success"],
+            task=result["task"],
+            steps=result["steps"],
+            final_output=result["final_output"],
+            error=result.get("error", ""),
+            execution_time_seconds=result["execution_time_seconds"],
+            reflection=result.get("reflection"),
+            reasoning_history=result.get("reasoning_history", [])
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error executing advanced research: {str(e)}"
+        )
+
+
+@app.post("/api/adaptive-research")
+async def execute_adaptive_research(request: AdaptiveResearchRequest):
+    """
+    Execute research with adaptive strategy selection.
+    
+    Args:
+        request: Adaptive research request
+        
+    Returns:
+        Research results with strategy used
+    """
+    try:
+        # Initialize adaptive pipeline
+        pipeline = AdaptiveResearchPipeline()
+        
+        # Execute with strategy
+        result = await pipeline.run(
+            task=request.task,
+            strategy=request.strategy
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error executing adaptive research: {str(e)}"
+        )
+
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    print("Agentic Research System starting...")
+    print("Agentic Research System starting")
     print(f"Environment: {settings.environment}")
     print(f"Model: {settings.default_model}")
     print("System ready!")
@@ -231,7 +357,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on application shutdown."""
-    print("Agentic Research System shutting down...")
+    print("Agentic Research System shutting down")
 
 
 if __name__ == "__main__":
