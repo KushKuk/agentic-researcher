@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any
-from pipelines import ResearchPipeline
+from pipelines import ResearchPipeline, PaperSummarizationPipeline
 from config import settings
 
 # Initialize FastAPI app
@@ -19,7 +19,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,17 +50,45 @@ class ResearchResponse(BaseModel):
     error: str = ""
 
 
+class PaperSummarizationRequest(BaseModel):
+    """Request model for paper summarization."""
+    query: str
+    num_papers: int = 3
+    summarize: bool = True
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "transformer architectures for NLP",
+                "num_papers": 3,
+                "summarize": True
+            }
+        }
+
+
+class PaperSummarizationResponse(BaseModel):
+    """Response model for paper summarization."""
+    query: str
+    papers: list
+    summaries: list
+    errors: list = []
+
+
 # Endpoints
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
     return {
         "name": "Agentic Research System",
-        "version": "0.1.0",
+        "version": "0.2.0",
+        "phase": "Phase 2 - Paper Summarization",
         "status": "running",
         "endpoints": {
             "research": "/api/research",
+            "summarize": "/api/summarize",
+            "summarize_url": "/api/summarize-url",
             "health": "/health",
+            "tools": "/api/tools",
             "docs": "/docs"
         }
     }
@@ -127,6 +155,66 @@ async def list_tools():
             for tool in pipeline.tools
         ]
     }
+
+
+@app.post("/api/summarize", response_model=PaperSummarizationResponse)
+async def summarize_papers(request: PaperSummarizationRequest):
+    """
+    Search for papers and generate summaries.
+    
+    Args:
+        request: Paper summarization request
+        
+    Returns:
+        Papers with summaries
+    """
+    try:
+        # Initialize pipeline
+        pipeline = PaperSummarizationPipeline()
+        
+        # Execute summarization
+        result = await pipeline.run(
+            query=request.query,
+            num_papers=request.num_papers,
+            summarize=request.summarize
+        )
+        
+        return PaperSummarizationResponse(
+            query=result["query"],
+            papers=result["papers"],
+            summaries=result["summaries"],
+            errors=result.get("errors", [])
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error summarizing papers: {str(e)}"
+        )
+
+
+@app.post("/api/summarize-url")
+async def summarize_from_url(pdf_url: str, title: str = "Unknown"):
+    """
+    Summarize a paper from a direct PDF URL.
+    
+    Args:
+        pdf_url: Direct URL to PDF file
+        title: Optional paper title
+        
+    Returns:
+        Summary results
+    """
+    try:
+        pipeline = PaperSummarizationPipeline()
+        result = await pipeline.summarize_from_url(pdf_url=pdf_url, title=title)
+        return result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing PDF: {str(e)}"
+        )
 
 
 # Startup event

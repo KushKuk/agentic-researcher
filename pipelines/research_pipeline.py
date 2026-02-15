@@ -3,9 +3,10 @@ Research pipeline that orchestrates the complete workflow.
 Manages agent execution and state transitions.
 """
 from typing import Dict, Any
-from agents import PlannerAgent, AgentState
-from tools import SemanticScholarTool
-from config import settings
+from agents.planner_agent import PlannerAgent
+from agents.base_agent import AgentState
+from tools.semantic_scholar_tool import SemanticScholarTool
+from config.config_settings import settings
 
 
 class ResearchPipeline:
