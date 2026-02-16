@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # API Keys
-    openai_api_key: str
+    google_api_key: str
     anthropic_api_key: Optional[str] = None
     semantic_scholar_api_key: Optional[str] = None
     
@@ -20,12 +20,15 @@ class Settings(BaseSettings):
     environment: str = "development"
     
     # Agent Configuration
-    default_model: str = "gpt-4-turbo-preview"
+    default_model: str = "gemini-pro"
     max_iterations: int = 10
     temperature: float = 0.7
     
-    # Future: Database paths
-    faiss_index_path: Optional[str] = None
+    embedding_model: str = "all-MiniLM-L6-v2"
+    vector_db_path: str = "./data/vector_db"
+    faiss_index_path: str = "./data/vector_db/faiss_index"
+    metadata_path: str = "./data/vector_db/metadata.json"
+    
     neo4j_uri: Optional[str] = None
     neo4j_user: Optional[str] = None
     neo4j_password: Optional[str] = None

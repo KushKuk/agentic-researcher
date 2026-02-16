@@ -36,7 +36,7 @@ config/secrets.py
 # Data & Memory (AI)
 # =========================
 data/
-memory/
+# memory/
 *.faiss
 *.index
 *.db

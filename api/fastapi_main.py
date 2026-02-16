@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional
 from pipelines.research_pipeline import ResearchPipeline
 from pipelines.paper_summarization_pipeline import PaperSummarizationPipeline
 from pipelines.advanced_research_pipeline import AdvancedResearchPipeline, AdaptiveResearchPipeline
+from pipelines.memory_enhanced_pipeline import MemoryEnhancedPipeline
+from agents.memory_agent import MemoryAgent
 from config.config_settings import settings
 
 # Initialize FastAPI app
@@ -120,14 +122,64 @@ class AdaptiveResearchRequest(BaseModel):
         }
 
 
+class MemoryResearchRequest(BaseModel):
+    """Request model for memory-enhanced research."""
+    task: str
+    max_steps: int = 15
+    use_memory_context: bool = True
+    auto_store: bool = True
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task": "Research recent advances in RAG systems",
+                "max_steps": 15,
+                "use_memory_context": True,
+                "auto_store": True
+            }
+        }
+
+
+class MemorySearchRequest(BaseModel):
+    """Request model for memory search."""
+    query: str
+    top_k: int = 5
+    min_similarity: float = 0.5
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "transformer architectures",
+                "top_k": 5,
+                "min_similarity": 0.5
+            }
+        }
+
+
+class MemorySummarizationRequest(BaseModel):
+    """Request model for memory-enhanced summarization."""
+    query: str
+    num_papers: int = 5
+    store_in_memory: bool = True
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "attention mechanisms in NLP",
+                "num_papers": 5,
+                "store_in_memory": True
+            }
+        }
+
+
 # Endpoints
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
     return {
         "name": "Agentic Research System",
-        "version": "0.3.0",
-        "phase": "Phase 3 - Advanced LLM Planner",
+        "version": "0.4.0",
+        "phase": "Phase 4 - Vector Memory Integration",
         "status": "running",
         "endpoints": {
             "research": "/api/research",
@@ -135,6 +187,10 @@ async def root():
             "summarize_url": "/api/summarize-url",
             "advanced_research": "/api/advanced-research",
             "adaptive_research": "/api/adaptive-research",
+            "memory_research": "/api/memory-research",
+            "memory_search": "/api/memory/search",
+            "memory_summarize": "/api/memory/summarize",
+            "memory_stats": "/api/memory/stats",
             "health": "/health",
             "tools": "/api/tools",
             "docs": "/docs"
@@ -143,7 +199,10 @@ async def root():
             "multi_step_reasoning": True,
             "error_recovery": True,
             "self_reflection": True,
-            "parallel_execution": "experimental"
+            "parallel_execution": "experimental",
+            "vector_memory": True,
+            "semantic_search": True,
+            "knowledge_base": True
         }
     }
 
@@ -343,11 +402,163 @@ async def execute_adaptive_research(request: AdaptiveResearchRequest):
         )
 
 
+@app.post("/api/memory-research")
+async def execute_memory_research(request: MemoryResearchRequest):
+    """
+    Execute research with vector memory integration.
+    
+    Args:
+        request: Memory-enhanced research request
+        
+    Returns:
+        Research results with memory context and storage info
+    """
+    try:
+        # Initialize memory-enhanced pipeline
+        pipeline = MemoryEnhancedPipeline(
+            max_steps=request.max_steps,
+            enable_memory=True,
+            auto_store=request.auto_store
+        )
+        
+        # Execute with memory
+        result = await pipeline.run(
+            task=request.task,
+            use_memory_context=request.use_memory_context
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error executing memory research: {str(e)}"
+        )
+
+
+@app.post("/api/memory/search")
+async def search_memory(request: MemorySearchRequest):
+    """
+    Search vector memory for relevant papers.
+    
+    Args:
+        request: Memory search request
+        
+    Returns:
+        Relevant papers from memory
+    """
+    try:
+        # Initialize pipeline with memory
+        pipeline = MemoryEnhancedPipeline(enable_memory=True)
+        
+        # Search memory
+        result = await pipeline.search_memory(
+            query=request.query,
+            top_k=request.top_k,
+            min_similarity=request.min_similarity
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error searching memory: {str(e)}"
+        )
+
+
+@app.post("/api/memory/summarize")
+async def memory_summarize_papers(request: MemorySummarizationRequest):
+    """
+    Research and summarize papers with automatic memory storage.
+    
+    Args:
+        request: Memory summarization request
+        
+    Returns:
+        Summaries with memory integration
+    """
+    try:
+        # Initialize pipeline
+        pipeline = MemoryEnhancedPipeline(
+            enable_memory=True,
+            auto_store=request.store_in_memory
+        )
+        
+        # Execute with summarization
+        result = await pipeline.run_with_summarization(
+            query=request.query,
+            num_papers=request.num_papers,
+            store_in_memory=request.store_in_memory
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error in memory summarization: {str(e)}"
+        )
+
+
+@app.get("/api/memory/stats")
+async def get_memory_stats():
+    """
+    Get statistics about the vector memory store.
+    
+    Returns:
+        Memory store statistics
+    """
+    try:
+        # Initialize memory agent
+        memory = MemoryAgent()
+        
+        stats = memory.get_memory_stats()
+        
+        return {
+            "success": True,
+            "stats": stats
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting memory stats: {str(e)}"
+        )
+
+
+@app.delete("/api/memory/clear")
+async def clear_memory():
+    """
+    Clear all data from vector memory.
+    
+    Returns:
+        Confirmation message
+    """
+    try:
+        # Initialize memory agent
+        memory = MemoryAgent()
+        
+        # Clear memory
+        memory.clear_memory()
+        
+        return {
+            "success": True,
+            "message": "Memory cleared successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error clearing memory: {str(e)}"
+        )
+
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    print("Agentic Research System starting")
+    print("Agentic Research System starting...")
     print(f"Environment: {settings.environment}")
     print(f"Model: {settings.default_model}")
     print("System ready!")
@@ -357,7 +568,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on application shutdown."""
-    print("Agentic Research System shutting down")
+    print("Agentic Research System shutting down...")
 
 
 if __name__ == "__main__":
