@@ -176,8 +176,6 @@ class MemorySummarizationRequest(BaseModel):
         }
 
 
-# ── Phase 5: Knowledge Graph models ─────────────────────────────────────────
-
 class GraphBuildRequest(BaseModel):
     """Request to search papers and build the knowledge graph."""
     query: str
