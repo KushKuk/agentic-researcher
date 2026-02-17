@@ -3,7 +3,7 @@ LLM factory for creating Gemini language model instances.
 """
 from typing import Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
-from config import settings
+from config.config_settings import settings
 
 
 def create_llm(

@@ -3,11 +3,10 @@ Advanced planner agent with multi-step reasoning and dynamic replanning.
 Includes reflection, error recovery, and context-aware decision making.
 """
 from typing import List, Dict, Any, Optional
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
 from tools.base_tool import BaseTool
-from config import settings
+from llm_factory import create_llm
 import json
 
 
@@ -105,10 +104,9 @@ JSON format:
         )
         
         self.tools = {tool.name: tool for tool in tools}
-        self.llm = ChatOpenAI(
-            model=model or settings.default_model,
-            temperature=temperature,
-            openai_api_key=settings.openai_api_key
+        self.llm = create_llm(
+            model=model,
+            temperature=temperature
         )
         self.enable_reflection = enable_reflection
         

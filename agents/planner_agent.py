@@ -3,11 +3,10 @@ Planner agent that uses LLM to orchestrate tool usage.
 This agent reasons about which tools to use and in what order.
 """
 from typing import List, Dict, Any, Optional
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
 from tools.base_tool import BaseTool
-from config import settings
+from llm_factory import create_llm
 
 
 class PlannerAgent(BaseAgent):
@@ -59,10 +58,9 @@ Respond in JSON format:
         )
         
         self.tools = {tool.name: tool for tool in tools}
-        self.llm = ChatOpenAI(
-            model=model or settings.default_model,
-            temperature=temperature,
-            openai_api_key=settings.openai_api_key
+        self.llm = create_llm(
+            model=model,
+            temperature=temperature
         )
         
         self.prompt = ChatPromptTemplate.from_template(self.PLANNER_PROMPT)

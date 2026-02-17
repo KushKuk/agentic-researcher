@@ -3,10 +3,9 @@ Summarization agent for extracting key information from academic papers.
 Uses LLM to generate structured summaries from paper text.
 """
 from typing import Dict, Any, Optional
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
-from config import settings
+from llm_factory import create_llm
 
 
 class SummarizationAgent(BaseAgent):
@@ -72,10 +71,9 @@ Return ONLY the abstract text, nothing else. If you cannot find a clear abstract
             description="Extracts key information and generates summaries from academic papers"
         )
         
-        self.llm = ChatOpenAI(
-            model=model or settings.default_model,
-            temperature=temperature,
-            openai_api_key=settings.openai_api_key
+        self.llm = create_llm(
+            model=model,
+            temperature=temperature
         )
         
         self.summary_prompt = ChatPromptTemplate.from_template(self.SUMMARIZATION_PROMPT)

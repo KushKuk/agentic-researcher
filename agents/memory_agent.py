@@ -2,10 +2,10 @@
 Memory agent for managing long-term knowledge with vector storage.
 Handles storage, retrieval, and semantic search of research papers.
 """
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from agents.base_agent import BaseAgent, AgentState
 from memory.vector_store import VectorMemoryStore
-from config import settings
+from config.config_settings import settings
 
 
 class MemoryAgent(BaseAgent):
@@ -172,9 +172,8 @@ class MemoryAgent(BaseAgent):
                 top_k=top_k
             )
             
-            # Format results (excluding the query paper itself)
             papers = []
-            for vector_id, score, metadata in results[1:]:  # Skip first (itself)
+            for vector_id, score, metadata in results[1:]:
                 papers.append({
                     "vector_id": vector_id,
                     "similarity_score": score,
