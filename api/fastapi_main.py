@@ -5,12 +5,16 @@ Provides REST API endpoints for triggering research workflows.
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pipelines.research_pipeline import ResearchPipeline
 from pipelines.paper_summarization_pipeline import PaperSummarizationPipeline
-from pipelines.advanced_research_pipeline import AdvancedResearchPipeline, AdaptiveResearchPipeline
+from pipelines.advanced_research_pipeline import AdvancedResearchPipeline
+from pipelines.advanced_research_pipeline import AdaptiveResearchPipeline
 from pipelines.memory_enhanced_pipeline import MemoryEnhancedPipeline
+from pipelines.knowledge_graph_pipeline import KnowledgeGraphPipeline
+
 from agents.memory_agent import MemoryAgent
+from agents.knowledge_graph_agent import KnowledgeGraphAgent
 from config.config_settings import settings
 
 # Initialize FastAPI app
@@ -23,7 +27,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -172,38 +176,96 @@ class MemorySummarizationRequest(BaseModel):
         }
 
 
+# ── Phase 5: Knowledge Graph models ─────────────────────────────────────────
+
+class GraphBuildRequest(BaseModel):
+    """Request to search papers and build the knowledge graph."""
+    query: str
+    num_papers: int = 10
+    store_in_memory: bool = True
+    build_graph: bool = True
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "transformer architectures",
+                "num_papers": 10,
+                "store_in_memory": True,
+                "build_graph": True,
+            }
+        }
+
+
+class GraphQueryRequest(BaseModel):
+    """Request to query the knowledge graph."""
+    query_type: str
+    params: Dict[str, Any] = {}
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query_type": "papers_by_concept",
+                "params": {"concept": "attention", "limit": 10},
+            }
+        }
+
+
+class GraphIngestRequest(BaseModel):
+    """Directly ingest papers into the knowledge graph."""
+    papers: List[Dict[str, Any]]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "papers": [
+                    {
+                        "paper_id": "abc123",
+                        "title": "Attention Is All You Need",
+                        "abstract": "...",
+                        "authors": ["Vaswani"],
+                        "year": 2017,
+                    }
+                ]
+            }
+        }
+
+
 # Endpoints
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
     return {
         "name": "Agentic Research System",
-        "version": "0.4.0",
-        "phase": "Phase 4 - Vector Memory Integration",
+        "version": "0.5.0",
+        "phase": "Phase 5 - Knowledge Graph",
         "status": "running",
         "endpoints": {
-            "research": "/api/research",
-            "summarize": "/api/summarize",
-            "summarize_url": "/api/summarize-url",
+            "research":          "/api/research",
+            "summarize":         "/api/summarize",
             "advanced_research": "/api/advanced-research",
             "adaptive_research": "/api/adaptive-research",
-            "memory_research": "/api/memory-research",
-            "memory_search": "/api/memory/search",
-            "memory_summarize": "/api/memory/summarize",
-            "memory_stats": "/api/memory/stats",
-            "health": "/health",
-            "tools": "/api/tools",
-            "docs": "/docs"
+            "memory_research":   "/api/memory-research",
+            "memory_search":     "/api/memory/search",
+            "memory_summarize":  "/api/memory/summarize",
+            "memory_stats":      "/api/memory/stats",
+            "graph_build":       "/api/graph/build",
+            "graph_query":       "/api/graph/query",
+            "graph_ingest":      "/api/graph/ingest",
+            "graph_stats":       "/api/graph/stats",
+            "graph_clear":       "/api/graph/clear",
+            "health":            "/health",
+            "docs":              "/docs",
         },
         "features": {
             "multi_step_reasoning": True,
-            "error_recovery": True,
-            "self_reflection": True,
-            "parallel_execution": "experimental",
-            "vector_memory": True,
-            "semantic_search": True,
-            "knowledge_base": True
-        }
+            "error_recovery":       True,
+            "self_reflection":      True,
+            "vector_memory":        True,
+            "semantic_search":      True,
+            "knowledge_graph":      True,
+            "entity_extraction":    True,
+            "citation_networks":    True,
+        },
     }
 
 
@@ -529,29 +591,94 @@ async def get_memory_stats():
 
 @app.delete("/api/memory/clear")
 async def clear_memory():
+    """Clear all data from vector memory."""
+    try:
+        memory = MemoryAgent()
+        memory.clear_memory()
+        return {"success": True, "message": "Memory cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing memory: {str(e)}")
+
+
+# ── Phase 5: Knowledge Graph endpoints ───────────────────────────────────────
+
+@app.post("/api/graph/build")
+async def build_knowledge_graph(request: GraphBuildRequest):
     """
-    Clear all data from vector memory.
-    
-    Returns:
-        Confirmation message
+    Search papers, store in memory, and populate the knowledge graph.
+    The main Phase 5 entry point.
     """
     try:
-        # Initialize memory agent
-        memory = MemoryAgent()
-        
-        # Clear memory
-        memory.clear_memory()
-        
-        return {
-            "success": True,
-            "message": "Memory cleared successfully"
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error clearing memory: {str(e)}"
+        pipeline = KnowledgeGraphPipeline(enable_memory=request.store_in_memory)
+        result = await pipeline.run(
+            query=request.query,
+            num_papers=request.num_papers,
+            store_in_memory=request.store_in_memory,
+            build_graph=request.build_graph,
         )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error building graph: {str(e)}")
+
+
+@app.post("/api/graph/query")
+async def query_knowledge_graph(request: GraphQueryRequest):
+    """
+    Query the knowledge graph with a named query type.
+
+    query_type options:
+    - papers_by_concept  – params: concept, limit
+    - papers_by_author   – params: author, limit
+    - author_network     – params: author, depth
+    - citation_network   – params: paper_id, depth
+    - top_concepts       – params: limit
+    - related_concepts   – params: concept, limit
+    - search_papers      – params: keyword, limit
+    - prolific_authors   – params: limit
+    """
+    try:
+        pipeline = KnowledgeGraphPipeline()
+        result = await pipeline.query_graph(
+            query_type=request.query_type,
+            params=request.params,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error querying graph: {str(e)}")
+
+
+@app.post("/api/graph/ingest")
+async def ingest_papers_to_graph(request: GraphIngestRequest):
+    """Directly ingest a list of papers into the knowledge graph."""
+    try:
+        pipeline = KnowledgeGraphPipeline()
+        result = await pipeline.ingest_papers_directly(request.papers)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error ingesting papers: {str(e)}")
+
+
+@app.get("/api/graph/stats")
+async def get_graph_stats():
+    """Return current knowledge graph statistics."""
+    try:
+        pipeline = KnowledgeGraphPipeline()
+        return await pipeline.get_graph_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting graph stats: {str(e)}")
+
+
+@app.delete("/api/graph/clear")
+async def clear_graph():
+    """Delete all nodes and relationships from the knowledge graph."""
+    try:
+        agent = KnowledgeGraphAgent()
+        await agent.connect()
+        await agent.graph.clear_graph()
+        await agent.close()
+        return {"success": True, "message": "Knowledge graph cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing graph: {str(e)}")
 
 
 # Startup event
