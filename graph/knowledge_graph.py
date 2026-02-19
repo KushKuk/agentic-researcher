@@ -2,9 +2,12 @@
 Neo4j knowledge graph manager for research entities and relationships.
 Handles papers, authors, concepts, and their connections.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, cast, TYPE_CHECKING
 from neo4j import AsyncGraphDatabase, AsyncDriver
 from config.config_settings import settings
+
+if TYPE_CHECKING:
+    from typing import LiteralString
 
 
 class KnowledgeGraphManager:
@@ -32,9 +35,9 @@ class KnowledgeGraphManager:
         user: Optional[str] = None,
         password: Optional[str] = None
     ):
-        self.uri = uri or settings.neo4j_uri
-        self.user = user or settings.neo4j_user
-        self.password = password or settings.neo4j_password
+        self.uri: str = uri or settings.neo4j_uri
+        self.user: str = user or settings.neo4j_user
+        self.password: str = password or settings.neo4j_password
         self._driver: Optional[AsyncDriver] = None
 
     async def connect(self):
@@ -51,6 +54,12 @@ class KnowledgeGraphManager:
         if self._driver:
             await self._driver.close()
 
+    @property
+    def driver(self) -> AsyncDriver:
+        """Get the driver, asserting it's connected."""
+        assert self._driver is not None, "Driver not connected. Call await connect() first."
+        return self._driver
+
     async def _create_constraints(self):
         """Create uniqueness constraints and indexes."""
         queries = [
@@ -61,10 +70,10 @@ class KnowledgeGraphManager:
             "CREATE INDEX paper_year IF NOT EXISTS FOR (p:Paper) ON (p.year)",
             "CREATE INDEX paper_title IF NOT EXISTS FOR (p:Paper) ON (p.title)",
         ]
-        async with self._driver.session() as session:
+        async with self.driver.session() as session:
             for query in queries:
                 try:
-                    await session.run(query)
+                    await session.run(cast("LiteralString", query))
                 except Exception:
                     pass  # Constraint may already exist
 
@@ -90,15 +99,16 @@ class KnowledgeGraphManager:
             p.url           = $url
         RETURN p
         """
-        async with self._driver.session() as session:
-            await session.run(query, **{
-                "paper_id":      paper.get("paper_id", ""),
-                "title":         paper.get("title", ""),
-                "abstract":      paper.get("abstract", ""),
-                "year":          paper.get("year"),
-                "citation_count":paper.get("citation_count", 0),
-                "url":           paper.get("url", ""),
-            })
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                paper_id=paper.get("paper_id", ""),
+                title=paper.get("title", ""),
+                abstract=paper.get("abstract", ""),
+                year=paper.get("year"),
+                citation_count=paper.get("citation_count", 0),
+                url=paper.get("url", "")
+            )
         return True
 
     async def add_papers_batch(self, papers: List[Dict[str, Any]]) -> int:
@@ -117,15 +127,15 @@ class KnowledgeGraphManager:
             paper.citation_count = p.citation_count,
             paper.url            = p.url
         """
-        async with self._driver.session() as session:
-            await session.run(query, papers=papers)
+        async with self.driver.session() as session:
+            await session.run(cast("LiteralString", query), papers=papers)
         return len(papers)
 
     async def get_paper(self, paper_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve a paper node by ID."""
         query = "MATCH (p:Paper {paper_id: $paper_id}) RETURN p"
-        async with self._driver.session() as session:
-            result = await session.run(query, paper_id=paper_id)
+        async with self.driver.session() as session:
+            result = await session.run(cast("LiteralString", query), paper_id=paper_id)
             record = await result.single()
             return dict(record["p"]) if record else None
 
@@ -138,8 +148,12 @@ class KnowledgeGraphManager:
         SET a.affiliations = $affiliations
         RETURN a
         """
-        async with self._driver.session() as session:
-            await session.run(query, name=name, affiliations=affiliations or [])
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                name=name,
+                affiliations=affiliations or []
+            )
         return True
 
     # ─── Concept Operations ──────────────────────────────────────────────────────
@@ -151,8 +165,12 @@ class KnowledgeGraphManager:
         SET c.category = $category
         RETURN c
         """
-        async with self._driver.session() as session:
-            await session.run(query, name=name, category=category or "general")
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                name=name,
+                category=category or "general"
+            )
         return True
 
     # ─── Venue Operations ────────────────────────────────────────────────────────
@@ -164,8 +182,12 @@ class KnowledgeGraphManager:
         SET v.type = $venue_type
         RETURN v
         """
-        async with self._driver.session() as session:
-            await session.run(query, name=name, venue_type=venue_type or "unknown")
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                name=name,
+                venue_type=venue_type or "unknown"
+            )
         return True
 
     # ─── Relationship Operations ─────────────────────────────────────────────────
@@ -177,8 +199,12 @@ class KnowledgeGraphManager:
         MERGE (a:Author {name: $author_name})
         MERGE (p)-[:AUTHORED_BY]->(a)
         """
-        async with self._driver.session() as session:
-            await session.run(query, paper_id=paper_id, author_name=author_name)
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                paper_id=paper_id,
+                author_name=author_name
+            )
         return True
 
     async def link_paper_concept(self, paper_id: str, concept_name: str, weight: float = 1.0) -> bool:
@@ -189,8 +215,13 @@ class KnowledgeGraphManager:
         MERGE (p)-[r:COVERS]->(c)
         SET r.weight = $weight
         """
-        async with self._driver.session() as session:
-            await session.run(query, paper_id=paper_id, concept_name=concept_name, weight=weight)
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                paper_id=paper_id,
+                concept_name=concept_name,
+                weight=weight
+            )
         return True
 
     async def link_paper_citation(self, citing_id: str, cited_id: str) -> bool:
@@ -200,8 +231,12 @@ class KnowledgeGraphManager:
         MATCH (b:Paper {paper_id: $cited_id})
         MERGE (a)-[:CITES]->(b)
         """
-        async with self._driver.session() as session:
-            await session.run(query, citing_id=citing_id, cited_id=cited_id)
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                citing_id=citing_id,
+                cited_id=cited_id
+            )
         return True
 
     async def link_paper_venue(self, paper_id: str, venue_name: str) -> bool:
@@ -211,8 +246,12 @@ class KnowledgeGraphManager:
         MERGE (v:Venue {name: $venue_name})
         MERGE (p)-[:PUBLISHED_IN]->(v)
         """
-        async with self._driver.session() as session:
-            await session.run(query, paper_id=paper_id, venue_name=venue_name)
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                paper_id=paper_id,
+                venue_name=venue_name
+            )
         return True
 
     async def link_concepts(self, concept_a: str, concept_b: str) -> bool:
@@ -222,8 +261,12 @@ class KnowledgeGraphManager:
         MERGE (b:Concept {name: $concept_b})
         MERGE (a)-[:RELATED_TO]->(b)
         """
-        async with self._driver.session() as session:
-            await session.run(query, concept_a=concept_a, concept_b=concept_b)
+        async with self.driver.session() as session:
+            await session.run(
+                cast("LiteralString", query),
+                concept_a=concept_a,
+                concept_b=concept_b
+            )
         return True
 
     # ─── Query Operations ─────────────────────────────────────────────────────────
@@ -237,8 +280,12 @@ class KnowledgeGraphManager:
         ORDER BY p.citation_count DESC
         LIMIT $limit
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, concept=concept, limit=limit)
+        async with self.driver.session() as session:
+            result = await session.run(
+                cast("LiteralString", query),
+                concept=concept,
+                limit=limit
+            )
             records = await result.data()
             return [dict(r["p"]) for r in records]
 
@@ -251,8 +298,12 @@ class KnowledgeGraphManager:
         ORDER BY p.year DESC
         LIMIT $limit
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, author_name=author_name, limit=limit)
+        async with self.driver.session() as session:
+            result = await session.run(
+                cast("LiteralString", query),
+                author_name=author_name,
+                limit=limit
+            )
             records = await result.data()
             return [dict(r["p"]) for r in records]
 
@@ -263,8 +314,12 @@ class KnowledgeGraphManager:
         RETURN nodes(path) AS nodes, relationships(path) AS rels
         LIMIT 100
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, author_name=author_name, depth=depth)
+        async with self.driver.session() as session:
+            result = await session.run(
+                cast("LiteralString", query),
+                author_name=author_name,
+                depth=depth
+            )
             records = await result.data()
             return {"paths": records, "author": author_name}
 
@@ -277,8 +332,12 @@ class KnowledgeGraphManager:
         ORDER BY cited.citation_count DESC
         LIMIT 50
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, paper_id=paper_id, depth=depth)
+        async with self.driver.session() as session:
+            result = await session.run(
+                cast("LiteralString", query),
+                paper_id=paper_id,
+                depth=depth
+            )
             records = await result.data()
             return {"root_paper": paper_id, "cited_papers": records}
 
@@ -290,8 +349,8 @@ class KnowledgeGraphManager:
         ORDER BY paper_count DESC
         LIMIT $limit
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, limit=limit)
+        async with self.driver.session() as session:
+            result = await session.run(cast("LiteralString", query), limit=limit)
             return await result.data()
 
     async def get_related_concepts(self, concept: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -303,8 +362,12 @@ class KnowledgeGraphManager:
         ORDER BY shared_papers DESC
         LIMIT $limit
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, concept=concept, limit=limit)
+        async with self.driver.session() as session:
+            result = await session.run(
+                cast("LiteralString", query),
+                concept=concept,
+                limit=limit
+            )
             return await result.data()
 
     async def get_prolific_authors(self, limit: int = 10) -> List[Dict[str, Any]]:
@@ -315,8 +378,8 @@ class KnowledgeGraphManager:
         ORDER BY paper_count DESC
         LIMIT $limit
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, limit=limit)
+        async with self.driver.session() as session:
+            result = await session.run(cast("LiteralString", query), limit=limit)
             return await result.data()
 
     async def search_papers(self, keyword: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -329,22 +392,28 @@ class KnowledgeGraphManager:
         ORDER BY p.citation_count DESC
         LIMIT $limit
         """
-        async with self._driver.session() as session:
-            result = await session.run(query, keyword=keyword, limit=limit)
+        async with self.driver.session() as session:
+            result = await session.run(
+                cast("LiteralString", query),
+                keyword=keyword,
+                limit=limit
+            )
             records = await result.data()
             return [dict(r["p"]) for r in records]
 
     async def get_graph_stats(self) -> Dict[str, Any]:
         """Return counts of all node and relationship types."""
-        async with self._driver.session() as session:
+        async with self.driver.session() as session:
             counts = {}
             for label in ["Paper", "Author", "Concept", "Venue"]:
-                r = await session.run(f"MATCH (n:{label}) RETURN count(n) AS cnt")
+                query = f"MATCH (n:{label}) RETURN count(n) AS cnt"
+                r = await session.run(cast("LiteralString", query))
                 rec = await r.single()
                 counts[label.lower() + "_count"] = rec["cnt"] if rec else 0
 
             for rel in ["AUTHORED_BY", "CITES", "COVERS", "PUBLISHED_IN", "RELATED_TO"]:
-                r = await session.run(f"MATCH ()-[r:{rel}]->() RETURN count(r) AS cnt")
+                query = f"MATCH ()-[r:{rel}]->() RETURN count(r) AS cnt"
+                r = await session.run(cast("LiteralString", query))
                 rec = await r.single()
                 counts[rel.lower() + "_count"] = rec["cnt"] if rec else 0
 
@@ -352,6 +421,7 @@ class KnowledgeGraphManager:
 
     async def clear_graph(self) -> bool:
         """Delete all nodes and relationships (use with caution)."""
-        async with self._driver.session() as session:
-            await session.run("MATCH (n) DETACH DELETE n")
+        query = "MATCH (n) DETACH DELETE n"
+        async with self.driver.session() as session:
+            await session.run(cast("LiteralString", query))
         return True

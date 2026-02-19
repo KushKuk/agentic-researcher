@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
 from tools.base_tool import BaseTool
-from llm_factory import create_llm
+from agents.llm_factory import create_llm
 
 
 class PlannerAgent(BaseAgent):
@@ -108,7 +108,7 @@ Respond in JSON format:
             response = await self.llm.ainvoke(prompt_text)
             
             # Parse response (simplified - in production use structured output)
-            decision = self._parse_decision(response.content)
+            decision = self._parse_decision(self._extract_text(response.content))
             
             # Execute action
             if decision["action"] == "finish":
@@ -140,6 +140,29 @@ Respond in JSON format:
         
         return state
     
+    def _extract_text(self, content: "str | list") -> str:
+        """
+        Normalise Gemini response content to a plain string.
+
+        Args:
+            content: Raw response.content from the LLM.
+
+        Returns:
+            A single concatenated string.
+        """
+        if isinstance(content, str):
+            return content
+        # List of blocks – extract text from each
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
+    
     def _parse_decision(self, response: str) -> Dict[str, Any]:
         """
         Parse LLM response into structured decision.
@@ -154,9 +177,12 @@ Respond in JSON format:
         import json
         import re
         
+        # Strip markdown code fences
+        clean = re.sub(r"```(?:json)?|```", "", response).strip()
+        
         try:
-            # Try to extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            # Try to extract JSON from cleaned response
+            json_match = re.search(r'\{.*\}', clean, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
         except:
