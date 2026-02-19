@@ -5,7 +5,7 @@ Uses LLM to generate structured summaries from paper text.
 from typing import Dict, Any, Optional
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
-from llm_factory import create_llm
+from agents.llm_factory import create_llm
 
 
 class SummarizationAgent(BaseAgent):
@@ -112,7 +112,7 @@ Return ONLY the abstract text, nothing else. If you cannot find a clear abstract
             )
             
             response = await self.llm.ainvoke(prompt)
-            summary_data = self._parse_summary(response.content)
+            summary_data = self._parse_summary(self._extract_text(response.content))
             
             # Store in state
             state.final_output = {
@@ -146,7 +146,7 @@ Return ONLY the abstract text, nothing else. If you cannot find a clear abstract
             prompt = self.abstract_prompt.format(text=text_snippet)
             response = await self.llm.ainvoke(prompt)
             
-            abstract = response.content.strip()
+            abstract = self._extract_text(response.content).strip()
             
             if "ABSTRACT_NOT_FOUND" in abstract:
                 return {"success": False, "abstract": None, "error": "Abstract not found"}
@@ -183,10 +183,33 @@ Return ONLY the abstract text, nothing else. If you cannot find a clear abstract
             prompt = self.summary_prompt.format(title=title, text=text)
             response = await self.llm.ainvoke(prompt)
             
-            return self._parse_summary(response.content)
+            return self._parse_summary(self._extract_text(response.content))
             
         except Exception as e:
             return {"error": str(e)}
+    
+    def _extract_text(self, content: "str | list") -> str:
+        """
+        Normalise Gemini response content to a plain string.
+
+        Args:
+            content: Raw response.content from the LLM.
+
+        Returns:
+            A single concatenated string.
+        """
+        if isinstance(content, str):
+            return content
+        # List of blocks – extract text from each
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
     
     def _parse_summary(self, response: str) -> Dict[str, Any]:
         """
@@ -201,9 +224,12 @@ Return ONLY the abstract text, nothing else. If you cannot find a clear abstract
         import json
         import re
         
+        # Strip markdown code fences
+        clean = re.sub(r"```(?:json)?|```", "", response).strip()
+        
         try:
-            # Try to extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            # Try to extract JSON from cleaned response
+            json_match = re.search(r'\{.*\}', clean, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
         except:

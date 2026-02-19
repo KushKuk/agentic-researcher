@@ -25,9 +25,10 @@ def create_llm(
     return ChatGoogleGenerativeAI(
         model=model,
         temperature=temperature,
-        google_api_key=settings.google_api_key,
+        api_key=settings.google_api_key,  # type: ignore[arg-type]
         convert_system_message_to_human=True
     )
 
 
+# Alias for backward compatibility
 create_gemini_llm = create_llm

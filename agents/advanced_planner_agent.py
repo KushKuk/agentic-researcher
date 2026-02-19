@@ -151,7 +151,7 @@ JSON format:
             )
             
             response = await self.llm.ainvoke(prompt)
-            decision = self._parse_decision(response.content)
+            decision = self._parse_decision(self._extract_text(response.content))
             
             # Store reasoning in metadata
             if "reasoning_history" not in state.metadata:
@@ -250,7 +250,7 @@ JSON format:
             )
             
             response = await self.llm.ainvoke(prompt)
-            reflection = self._parse_json(response.content)
+            reflection = self._parse_json(self._extract_text(response.content))
             
             return reflection
             
@@ -329,19 +329,49 @@ JSON format:
             "task": state.metadata.get("task", "")
         }
     
+    def _extract_text(
+        self,
+        content: "str | list"
+    ) -> str:
+        """
+        Normalise Gemini response content to a plain string.
+
+        Gemini can return either:
+        - a plain ``str``
+        - a ``list`` of content blocks, e.g. [{"type": "text", "text": "..."}]
+
+        Args:
+            content: Raw ``response.content`` from the LLM.
+
+        Returns:
+            A single concatenated string.
+        """
+        if isinstance(content, str):
+            return content
+        # List of blocks – pull out every "text" value and join them
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
+
     def _parse_decision(self, response: str) -> Dict[str, Any]:
         """
         Parse LLM response into structured decision.
-        
+
         Args:
-            response: LLM response text
-            
+            response: Plain-text LLM response (already normalised via _extract_text).
+
         Returns:
-            Structured decision dictionary
+            Structured decision dictionary.
         """
         parsed = self._parse_json(response)
-        
-        # Ensure required fields
+
+        # Ensure required fields are present
         if not parsed or "next_action" not in parsed:
             return {
                 "analysis": "Could not parse response",
@@ -350,35 +380,40 @@ JSON format:
                 "reasoning": "Parsing failed",
                 "parameters": {},
                 "fallback_action": None,
-                "expected_outcome": "Unknown"
+                "expected_outcome": "Unknown",
             }
-        
+
         return parsed
-    
+
     def _parse_json(self, response: str) -> Dict[str, Any]:
         """
-        Extract and parse JSON from response.
-        
+        Extract and parse JSON from a plain-text response.
+
+        Handles raw JSON as well as JSON wrapped in markdown fences.
+
         Args:
-            response: Response text
-            
+            response: Plain-text response string.
+
         Returns:
-            Parsed JSON dictionary
+            Parsed JSON dictionary, or ``{}`` on failure.
         """
         import re
-        
+
+        # Strip markdown code fences (```json ... ``` or ``` ... ```)
+        clean = re.sub(r"```(?:json)?|```", "", response).strip()
+
+        # 1. Try parsing the whole cleaned string
         try:
-            # Try direct parse
-            return json.loads(response)
-        except:
+            return json.loads(clean)
+        except json.JSONDecodeError:
             pass
-        
+
+        # 2. Try to find a JSON object anywhere in the text
         try:
-            # Try to extract JSON block
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-        except:
+            match = re.search(r"\{.*\}", clean, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+        except json.JSONDecodeError:
             pass
-        
+
         return {}

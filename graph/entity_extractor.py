@@ -4,7 +4,7 @@ Uses spaCy for NLP and Gemini for deeper concept extraction.
 """
 from typing import List, Dict, Any, Optional
 import spacy
-from config import create_llm
+from agents.llm_factory import create_llm
 import json
 import re
 
@@ -130,9 +130,32 @@ Rules:
 
         try:
             response = await self.llm.ainvoke(prompt)
-            return self._parse_json_response(response.content)
+            return self._parse_json_response(self._extract_text(response.content))
         except Exception:
             return {"concepts": [], "methods": [], "datasets": [], "tasks": [], "venues": []}
+
+    def _extract_text(self, content: "str | list") -> str:
+        """
+        Normalise Gemini response content to a plain string.
+
+        Args:
+            content: Raw response.content from the LLM.
+
+        Returns:
+            A single concatenated string.
+        """
+        if isinstance(content, str):
+            return content
+        # List of blocks – extract text from each
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
 
     def _parse_json_response(self, text: str) -> Dict[str, Any]:
         """Parse JSON from LLM response, stripping markdown fences."""

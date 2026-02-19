@@ -82,7 +82,6 @@ class VectorMemoryStore:
         """
         if self.metadata_path.exists():
             with open(self.metadata_path, 'r') as f:
-                # Convert string keys back to int
                 return {int(k): v for k, v in json.load(f).items()}
         return {}
     
@@ -208,10 +207,7 @@ class VectorMemoryStore:
         
         # Search FAISS index
         k = min(top_k, self.index.ntotal)
-        scores, indices = self.index.search(
-            np.array([query_embedding], dtype=np.float32),
-            k
-        )
+        scores, indices = self.index.search(np.array([query_embedding], dtype=np.float32),k)
         
         # Format results
         results = []

@@ -4,10 +4,13 @@ Phase 4: Semantic memory and knowledge base capabilities.
 """
 from typing import Dict, Any, Optional, List
 import time
-from agents import AdvancedPlannerAgent, MemoryAgent, AgentState
-from tools import SemanticScholarTool, PDFDownloaderTool, PDFParserTool
+from agents.advanced_planner_agent import AdvancedPlannerAgent
+from agents.memory_agent import MemoryAgent, AgentState
+from tools.semantic_scholar_tool import SemanticScholarTool
+from tools.pdf_downloader_tool import PDFDownloaderTool
+from tools.pdf_parser_tool import PDFParserTool
 from agents.summarization_agent import SummarizationAgent
-from config import settings
+from config.config_settings import settings
 
 
 class MemoryEnhancedPipeline:
