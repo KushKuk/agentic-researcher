@@ -1,7 +1,7 @@
 import React from 'react';
 import '../../styles/global.css';
 
-const BottomNav = ({ activeTab, onTabChange }) => {
+const BottomNav = ({ activeTab, onTabChange, isMinimized }) => {
     const tabs = [
         {
             id: 'home',
@@ -34,7 +34,7 @@ const BottomNav = ({ activeTab, onTabChange }) => {
     ];
 
     return (
-        <nav className="bottom-nav" aria-label="Bottom navigation">
+        <nav className={`bottom-nav ${isMinimized ? 'nav-minimized' : ''}`} aria-label="Bottom navigation">
             <div className="nav-surface">
                 <div className="nav-row">
                     {tabs.map((tab) => (

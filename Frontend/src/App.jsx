@@ -10,11 +10,16 @@ import './styles/global.css';
 
 import WorkspacesPage from './components/workspaces/WorkspacesPage';
 
+import SettingsPage from './components/settings/SettingsPage';
+import ResearchInput from './components/home/ResearchInput';
+import ResearchSummary from './components/home/ResearchSummary';
+
 function App() {
     const [activeTab, setActiveTab] = useState('home');
     const [modalOpen, setModalOpen] = useState(false);
     const [toast, setToast] = useState({ show: false, title: '', desc: '' });
     const [workspaceName, setWorkspaceName] = useState('');
+    const [researchState, setResearchState] = useState('idle'); // 'idle' | 'input' | 'complete'
 
     // State for workspaces list
     const [workspaces, setWorkspaces] = useState([]);
@@ -45,8 +50,12 @@ function App() {
     };
 
     const handleCreateClick = () => {
-        setModalOpen(true);
-        setWorkspaceName('');
+        if (activeTab === 'home') {
+            setResearchState('input');
+        } else {
+            setModalOpen(true);
+            setWorkspaceName('');
+        }
     };
 
     const handleConfirmCreate = () => {
@@ -89,6 +98,21 @@ function App() {
         // Future: Navigate to workspace detail / flow editor
     };
 
+    const handleResearchSubmit = (query) => {
+        // Simulate loading then switching to complete
+        setToast({ show: true, title: 'Extracting data', desc: 'Analyzing sources and generating report...' });
+        setTimeout(() => {
+            setResearchState('complete');
+            setToast({ show: false, title: '', desc: '' });
+        }, 800);
+    };
+
+    const handleEnterWorkspaceFromSummary = () => {
+        showToast('Workspace initialized', 'Navigating to full workspace editor...');
+        // For now just route to workspaces tab
+        setActiveTab('workspaces');
+    };
+
     return (
         <>
             <AppLayout>
@@ -104,17 +128,25 @@ function App() {
                 />
 
                 <main className="content" aria-label="Landing content" style={
-                    activeTab === 'home'
+                    activeTab === 'home' && researchState !== 'complete'
                         ? { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }
                         : {}
                 }>
-                    {activeTab === 'home' && (
+                    {activeTab === 'home' && researchState === 'idle' && (
                         <div style={{ width: '100%', maxWidth: '800px' }}>
                             <HeroCard
                                 onCreateClick={handleCreateClick}
                                 onOpenClick={() => setActiveTab('workspaces')}
                             />
                         </div>
+                    )}
+
+                    {activeTab === 'home' && researchState === 'input' && (
+                        <ResearchInput onSubmit={handleResearchSubmit} />
+                    )}
+
+                    {activeTab === 'home' && researchState === 'complete' && (
+                        <ResearchSummary onEnterWorkspace={handleEnterWorkspaceFromSummary} />
                     )}
 
                     {activeTab === 'workspaces' && (
@@ -124,10 +156,21 @@ function App() {
                             onOpenWorkspace={handleOpenWorkspace}
                         />
                     )}
+
+                    {activeTab === 'settings' && (
+                        <SettingsPage />
+                    )}
                 </main>
             </AppLayout>
 
-            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+            <BottomNav
+                activeTab={activeTab}
+                onTabChange={(tab) => {
+                    setActiveTab(tab);
+                    if (tab !== 'home') setResearchState('idle');
+                }}
+                isMinimized={researchState !== 'idle' && activeTab === 'home'}
+            />
 
             <Modal
                 isOpen={modalOpen}
