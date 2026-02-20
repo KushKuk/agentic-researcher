@@ -36,16 +36,11 @@ class SemanticScholarTool(BaseTool):
             "including title, authors, abstract, citation count, and publication year."
         )
     
-    async def execute(
-        self,
-        query: str,
-        limit: int = 10,
-        fields: Optional[List[str]] = None
-    ) -> ToolResult:
+    async def execute(self, **kwargs) -> ToolResult:
         """
         Search for papers on Semantic Scholar.
         
-        Args:
+        Args (from kwargs):
             query: Search query string
             limit: Maximum number of results (default: 10, max: 100)
             fields: List of fields to return (default: standard set)
@@ -53,6 +48,11 @@ class SemanticScholarTool(BaseTool):
         Returns:
             ToolResult with list of papers
         """
+        # Extract parameters from kwargs
+        query: str = kwargs.get("query", "")
+        limit: int = kwargs.get("limit", 10)
+        fields: Optional[List[str]] = kwargs.get("fields")
+        
         if not query:
             return self._error("Query parameter is required")
         

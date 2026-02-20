@@ -63,3 +63,5 @@ models/
 .cache/
 dist/
 build/
+
+Frontend/node_modules/

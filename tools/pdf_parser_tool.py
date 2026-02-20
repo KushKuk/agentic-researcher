@@ -22,16 +22,11 @@ class PDFParserTool(BaseTool):
             "Accepts a file path and returns extracted text, page count, and metadata."
         )
     
-    async def execute(
-        self,
-        file_path: str,
-        extract_pages: Optional[List[int]] = None,
-        max_pages: Optional[int] = None
-    ) -> ToolResult:
+    async def execute(self, **kwargs) -> ToolResult:
         """
         Parse a PDF file and extract content.
         
-        Args:
+        Args (from kwargs):
             file_path: Path to the PDF file
             extract_pages: Optional list of specific page numbers to extract (0-indexed)
             max_pages: Optional maximum number of pages to extract
@@ -39,6 +34,11 @@ class PDFParserTool(BaseTool):
         Returns:
             ToolResult with extracted content and metadata
         """
+        # Extract parameters from kwargs
+        file_path: str = kwargs.get("file_path", "")
+        extract_pages: Optional[List[int]] = kwargs.get("extract_pages")
+        max_pages: Optional[int] = kwargs.get("max_pages")
+        
         if not file_path:
             return self._error("file_path parameter is required")
         

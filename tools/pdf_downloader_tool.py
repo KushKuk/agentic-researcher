@@ -33,12 +33,11 @@ class PDFDownloaderTool(BaseTool):
             "downloads the PDF, and returns the local file path."
         )
     
-    async def execute(
-        self,
-        url: str,
-        filename: Optional[str] = None,
-        timeout: float = 60.0
-    ) -> ToolResult:
+    async def execute(self, **kwargs) -> ToolResult:
+        """Execute PDF download with given parameters."""
+        url: str = kwargs.get("url", "")
+        filename: Optional[str] = kwargs.get("filename")
+        timeout: float = kwargs.get("timeout", 60.0)
         """
         Download a PDF from URL.
         
