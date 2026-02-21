@@ -2,7 +2,7 @@
 Planner agent that uses LLM to orchestrate tool usage.
 This agent reasons about which tools to use and in what order.
 """
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional, Sequence
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
 from tools.base_tool import BaseTool
@@ -40,7 +40,7 @@ Respond in JSON format:
     
     def __init__(
         self,
-        tools: List[BaseTool],
+        tools: Sequence[BaseTool],
         model: Optional[str] = None,
         temperature: float = 0.7
     ):
