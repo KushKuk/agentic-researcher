@@ -64,4 +64,35 @@ models/
 dist/
 build/
 
-Frontend/node_modules
+
+# =========================
+# Frontend (React / Vite)
+# =========================
+
+# Dependencies
+Frontend/node_modules/
+
+# Build output
+Frontend/dist/
+Frontend/build/
+
+# Vite cache & temp
+Frontend/.vite/
+Frontend/.temp/
+
+# Environment / secrets
+Frontend/.env
+Frontend/.env.local
+Frontend/.env.development.local
+Frontend/.env.test.local
+Frontend/.env.production.local
+
+# Test coverage
+Frontend/coverage/
+
+# TypeScript build info
+Frontend/*.tsbuildinfo
+
+# Misc OS / editor artefacts
+Frontend/.DS_Store
+Frontend/Thumbs.db
