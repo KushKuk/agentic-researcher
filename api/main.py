@@ -235,8 +235,8 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "Agentic Research System",
-        "version": "0.6.0",
-        "phase": "Phase 6 - Outreach Automation",
+        "version": "0.7.0",
+        "phase": "Phase 7 - Self-Evaluation",
         "status": "running",
         "endpoints": {
             "research":          "/api/research",
@@ -255,6 +255,8 @@ async def root():
             "outreach_campaign":  "/api/outreach/campaign",
             "outreach_targeted":   "/api/outreach/targeted",
             "outreach_email":      "/api/outreach/email",
+            "iterative_research":  "/api/research/iterative",
+            "evaluate_research":   "/api/evaluate/research",
             "health":            "/health",
             "docs":              "/docs",
         },
@@ -985,6 +987,89 @@ async def generate_single_email(request: SingleEmailRequest):
             recipient_papers=papers,
             email_type=EmailType(request.email_type),
             context=request.context
+        )
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+# ── Phase 7: Self-Evaluation endpoints ────────────────────────────────────────
+
+class IterativeResearchRequest(BaseModel):
+    """Request for research with self-improvement."""
+    task: str
+    max_iterations: int = 3
+    quality_threshold: float = 8.0
+    use_memory: bool = True
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task": "Latest developments in quantum computing",
+                "max_iterations": 3,
+                "quality_threshold": 8.0
+            }
+        }
+
+
+class EvaluateResearchRequest(BaseModel):
+    """Request to evaluate existing research."""
+    task: str
+    output: str
+    sources: Optional[List[Dict[str, Any]]] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task": "Transformer models overview",
+                "output": "Transformers are neural networks...",
+                "sources": [{"title": "Attention Is All You Need", "year": 2017}]
+            }
+        }
+
+
+@app.post("/api/research/iterative")
+async def iterative_research(request: IterativeResearchRequest):
+    """
+    Execute research with iterative self-improvement.
+    
+    Agent evaluates its own output, identifies gaps, and runs
+    additional searches until quality threshold is met or
+    max iterations reached.
+    """
+    try:
+        from pipelines.iterative_research_pipeline import IterativeResearchPipeline
+        
+        pipeline = IterativeResearchPipeline(
+            max_iterations=request.max_iterations,
+            quality_threshold=request.quality_threshold,
+            enable_memory=request.use_memory
+        )
+        
+        result = await pipeline.run_with_self_improvement(task=request.task)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/evaluate/research")
+async def evaluate_research(request: EvaluateResearchRequest):
+    """
+    Evaluate existing research output.
+    
+    Provides quality scores, identifies weaknesses and gaps,
+    and suggests specific improvements.
+    """
+    try:
+        from pipelines.iterative_research_pipeline import IterativeResearchPipeline
+        
+        pipeline = IterativeResearchPipeline()
+        
+        result = await pipeline.evaluate_existing_research(
+            task=request.task,
+            output=request.output,
+            sources=request.sources
         )
         
         return result
