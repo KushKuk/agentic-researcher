@@ -5,6 +5,7 @@ All tools inherit from this base class to ensure consistent structure.
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 from pydantic import BaseModel
+from typing import Optional
 
 
 class ToolResult(BaseModel):
@@ -43,7 +44,7 @@ class BaseTool(ABC):
         """
         pass
     
-    def _success(self, data: Any, metadata: Dict[str, Any] = None) -> ToolResult:
+    def _success(self, data: Any, metadata: Optional[Dict[str, Any]] = None) -> ToolResult:
         """Helper to create success result."""
         return ToolResult(
             success=True,
@@ -51,7 +52,7 @@ class BaseTool(ABC):
             metadata=metadata or {}
         )
     
-    def _error(self, error: str, metadata: Dict[str, Any] = None) -> ToolResult:
+    def _error(self, error: str, metadata: Optional[Dict[str, Any]] = None) -> ToolResult:
         """Helper to create error result."""
         return ToolResult(
             success=False,

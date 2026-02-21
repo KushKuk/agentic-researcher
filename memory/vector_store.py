@@ -5,11 +5,18 @@ Stores and retrieves paper embeddings with metadata.
 import faiss
 import numpy as np
 import json
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-from sentence_transformers import SentenceTransformer
 import asyncio
+from pathlib import Path
 from datetime import datetime
+from typing import List, Dict, Any, Optional, Tuple
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError as e:
+    raise ImportError(
+        "sentence-transformers is required. "
+        "Install it with: pip install sentence-transformers"
+    ) from e
 
 
 class VectorMemoryStore:
@@ -40,7 +47,7 @@ class VectorMemoryStore:
             metadata_path: Path to metadata JSON file
             dimension: Embedding dimension
         """
-        self.embedding_model_name = embedding_model
+        self.embedding_model_name: str = embedding_model
         self.index_path = Path(index_path)
         self.metadata_path = Path(metadata_path)
         self.dimension = dimension
@@ -49,7 +56,7 @@ class VectorMemoryStore:
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Initialize embedding model
-        self.model = SentenceTransformer(embedding_model)
+        self.model: SentenceTransformer = SentenceTransformer(embedding_model)
         
         # Initialize or load FAISS index
         self.index = self._initialize_index()
@@ -82,6 +89,7 @@ class VectorMemoryStore:
         """
         if self.metadata_path.exists():
             with open(self.metadata_path, 'r') as f:
+                # Convert string keys back to int
                 return {int(k): v for k, v in json.load(f).items()}
         return {}
     
@@ -129,7 +137,7 @@ class VectorMemoryStore:
         embedding = embedding / np.linalg.norm(embedding)
         
         # Add to FAISS index
-        self.index.add(np.array([embedding], dtype=np.float32))
+        self.index.add(np.array([embedding], dtype=np.float32))  # type: ignore[call-arg]
         
         # Store metadata
         vector_id = self.next_id
@@ -207,7 +215,10 @@ class VectorMemoryStore:
         
         # Search FAISS index
         k = min(top_k, self.index.ntotal)
-        scores, indices = self.index.search(np.array([query_embedding], dtype=np.float32),k)
+        scores, indices = self.index.search(  # type: ignore[call-arg]
+            np.array([query_embedding], dtype=np.float32),
+            k
+        )
         
         # Format results
         results = []
@@ -260,7 +271,7 @@ class VectorMemoryStore:
             self.model.encode,
             text
         )
-        return embedding
+        return embedding  # type: ignore[return-value]
     
     def get_metadata(self, vector_id: int) -> Optional[Dict[str, Any]]:
         """

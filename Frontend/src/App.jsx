@@ -13,6 +13,7 @@ import WorkspacesPage from './components/workspaces/WorkspacesPage';
 import SettingsPage from './components/settings/SettingsPage';
 import ResearchInput from './components/home/ResearchInput';
 import ResearchSummary from './components/home/ResearchSummary';
+import WorkspaceCanvas from './components/workspaces/WorkspaceCanvas';
 
 function App() {
     const [activeTab, setActiveTab] = useState('home');
@@ -108,9 +109,9 @@ function App() {
     };
 
     const handleEnterWorkspaceFromSummary = () => {
-        showToast('Workspace initialized', 'Navigating to full workspace editor...');
-        // For now just route to workspaces tab
-        setActiveTab('workspaces');
+        showToast('Workspace initialized', 'Entering interactive canvas mode...');
+        setResearchState('idle'); // clear out summary mode
+        setActiveTab('workspace-canvas');
     };
 
     return (
@@ -160,6 +161,11 @@ function App() {
                     {activeTab === 'settings' && (
                         <SettingsPage />
                     )}
+                    {activeTab === 'workspace-canvas' && (
+                        <div style={{ flex: 1, padding: '5px', height: '100%', width: '100%' }}>
+                            <WorkspaceCanvas onBack={() => setActiveTab('workspaces')} />
+                        </div>
+                    )}
                 </main>
             </AppLayout>
 
@@ -169,7 +175,7 @@ function App() {
                     setActiveTab(tab);
                     if (tab !== 'home') setResearchState('idle');
                 }}
-                isMinimized={researchState !== 'idle' && activeTab === 'home'}
+                isMinimized={(researchState !== 'idle' && activeTab === 'home') || activeTab === 'workspace-canvas'}
             />
 
             <Modal

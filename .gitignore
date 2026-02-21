@@ -64,8 +64,4 @@ models/
 dist/
 build/
 
-
-# =========================
-# Frontend
-# =========================
-node_modules/
+Frontend/node_modules
