@@ -8,13 +8,13 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from pipelines.research_pipeline import ResearchPipeline
 from pipelines.paper_summarization_pipeline import PaperSummarizationPipeline
-from pipelines.advanced_research_pipeline import AdvancedResearchPipeline, AdaptiveResearchPipeline
+from pipelines.advanced_research_pipeline import AdvancedResearchPipeline,AdaptiveResearchPipeline
 from pipelines.memory_enhanced_pipeline import MemoryEnhancedPipeline
 from pipelines.knowledge_graph_pipeline import KnowledgeGraphPipeline
 
 from agents.memory_agent import MemoryAgent
 from agents.knowledge_graph_agent import KnowledgeGraphAgent
-from config.config_settings import settings
+from config.settings import settings
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -235,8 +235,8 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "Agentic Research System",
-        "version": "0.5.0",
-        "phase": "Phase 5 - Knowledge Graph",
+        "version": "0.6.0",
+        "phase": "Phase 6 - Outreach Automation",
         "status": "running",
         "endpoints": {
             "research":          "/api/research",
@@ -252,6 +252,9 @@ async def root():
             "graph_ingest":      "/api/graph/ingest",
             "graph_stats":       "/api/graph/stats",
             "graph_clear":       "/api/graph/clear",
+            "outreach_campaign":  "/api/outreach/campaign",
+            "outreach_targeted":   "/api/outreach/targeted",
+            "outreach_email":      "/api/outreach/email",
             "health":            "/health",
             "docs":              "/docs",
         },
@@ -814,6 +817,176 @@ async def verify_claims(request: VerifyClaimsRequest):
             summary=request.summary,
             source_paper_ids=request.source_paper_ids
         )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+# ── Phase 6: Outreach Automation endpoints ────────────────────────────────────
+
+class OutreachCampaignRequest(BaseModel):
+    """Request to create outreach campaign from search query."""
+    campaign_name: str
+    query: str
+    num_papers: int = 20
+    email_type: str = "collaboration"  # collaboration, question, feedback, interview
+    purpose: Optional[str] = None
+    sender_name: str
+    sender_affiliation: str
+    sender_tone: str = "professional"
+    filter_criteria: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "campaign_name": "transformer_researchers_2024",
+                "query": "transformer models",
+                "num_papers": 20,
+                "email_type": "collaboration",
+                "sender_name": "Dr. Jane Smith",
+                "sender_affiliation": "Stanford University"
+            }
+        }
+
+
+class TargetedCampaignRequest(BaseModel):
+    """Request to create targeted campaign for specific authors."""
+    campaign_name: str
+    target_authors: List[str]
+    email_type: str = "collaboration"
+    purpose: Optional[str] = None
+    sender_name: str
+    sender_affiliation: str
+    sender_tone: str = "professional"
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "campaign_name": "collaboration_outreach",
+                "target_authors": ["Yoshua Bengio", "Geoffrey Hinton"],
+                "email_type": "collaboration",
+                "sender_name": "Dr. Jane Smith",
+                "sender_affiliation": "Stanford University"
+            }
+        }
+
+
+class SingleEmailRequest(BaseModel):
+    """Request to generate single personalized email."""
+    recipient_name: str
+    paper_ids: List[str]  # Papers to use as context
+    email_type: str = "collaboration"
+    sender_name: str
+    sender_affiliation: str
+    context: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "recipient_name": "Geoffrey Hinton",
+                "paper_ids": ["paper123"],
+                "email_type": "question",
+                "sender_name": "Dr. Jane Smith",
+                "sender_affiliation": "Stanford University",
+                "context": {"question": "About the attention mechanism..."}
+            }
+        }
+
+
+@app.post("/api/outreach/campaign")
+async def create_outreach_campaign(request: OutreachCampaignRequest):
+    """
+    Create outreach campaign from search query.
+    
+    Searches papers, extracts author contacts, generates personalized emails,
+    and exports campaign to CSV/JSON.
+    """
+    try:
+        from pipelines.outreach_pipeline import OutreachPipeline
+        from outreach import EmailType
+        
+        pipeline = OutreachPipeline(
+            sender_name=request.sender_name,
+            sender_affiliation=request.sender_affiliation,
+            sender_tone=request.sender_tone
+        )
+        
+        result = await pipeline.create_campaign_from_query(
+            campaign_name=request.campaign_name,
+            query=request.query,
+            num_papers=request.num_papers,
+            email_type=EmailType(request.email_type),
+            purpose=request.purpose,
+            filter_criteria=request.filter_criteria
+        )
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/outreach/targeted")
+async def create_targeted_campaign(request: TargetedCampaignRequest):
+    """
+    Create targeted outreach campaign for specific authors.
+    
+    Finds papers by specified authors, generates personalized emails.
+    """
+    try:
+        from pipelines.outreach_pipeline import OutreachPipeline
+        from outreach import EmailType
+        
+        pipeline = OutreachPipeline(
+            sender_name=request.sender_name,
+            sender_affiliation=request.sender_affiliation,
+            sender_tone=request.sender_tone
+        )
+        
+        result = await pipeline.create_targeted_campaign(
+            campaign_name=request.campaign_name,
+            target_authors=request.target_authors,
+            email_type=EmailType(request.email_type),
+            purpose=request.purpose
+        )
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/outreach/email")
+async def generate_single_email(request: SingleEmailRequest):
+    """
+    Generate single personalized outreach email.
+    
+    Uses specified papers as context for personalization.
+    """
+    try:
+        from pipelines.outreach_pipeline import OutreachPipeline
+        from outreach import EmailType
+        from tools.semantic_scholar_tool import SemanticScholarTool
+        
+        pipeline = OutreachPipeline(
+            sender_name=request.sender_name,
+            sender_affiliation=request.sender_affiliation
+        )
+        
+        # Fetch papers for context
+        semantic_scholar = SemanticScholarTool()
+        papers = []
+        for paper_id in request.paper_ids:
+            # Would need to fetch by ID - simplified here
+            search_result = await semantic_scholar.execute(query=paper_id, limit=1)
+            if search_result.success and search_result.data:
+                papers.extend(search_result.data)
+        
+        result = await pipeline.generate_single_email(
+            recipient_name=request.recipient_name,
+            recipient_papers=papers,
+            email_type=EmailType(request.email_type),
+            context=request.context
+        )
+        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")

@@ -8,7 +8,7 @@ import time
 from agents.knowledge_graph_agent import KnowledgeGraphAgent
 from pipelines.memory_enhanced_pipeline import MemoryEnhancedPipeline
 from tools.semantic_scholar_tool import SemanticScholarTool
-from config.config_settings import settings
+from config.settings import settings
 
 
 class KnowledgeGraphPipeline:

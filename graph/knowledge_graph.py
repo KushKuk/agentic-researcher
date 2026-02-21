@@ -4,7 +4,7 @@ Handles papers, authors, concepts, and their connections.
 """
 from typing import List, Dict, Any, Optional, cast, TYPE_CHECKING
 from neo4j import AsyncGraphDatabase, AsyncDriver
-from config.config_settings import settings
+from config.settings import settings
 
 if TYPE_CHECKING:
     from typing import LiteralString

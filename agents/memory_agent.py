@@ -5,7 +5,7 @@ Handles storage, retrieval, and semantic search of research papers.
 from typing import List, Dict, Any, Optional
 from agents.base_agent import BaseAgent, AgentState
 from memory.vector_store import VectorMemoryStore
-from config.config_settings import settings
+from config.settings import settings
 
 
 class MemoryAgent(BaseAgent):
