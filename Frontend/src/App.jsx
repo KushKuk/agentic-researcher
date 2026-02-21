@@ -15,9 +15,13 @@ import ResearchInput from './components/home/ResearchInput';
 import ResearchSummary from './components/home/ResearchSummary';
 import WorkspaceCanvas from './components/workspaces/WorkspaceCanvas';
 import LandingPage from './components/home/LandingPage';
+import AuthPage from './components/auth/AuthPage';
 
 function App() {
-    const [hasEnteredApp, setHasEnteredApp] = useState(false);
+    // 'landing' | 'auth' | 'app'
+    const [appState, setAppState] = useState('landing');
+    const [user, setUser] = useState(null);
+
     const [activeTab, setActiveTab] = useState('home');
     const [modalOpen, setModalOpen] = useState(false);
     const [toast, setToast] = useState({ show: false, title: '', desc: '' });
@@ -116,8 +120,22 @@ function App() {
         setActiveTab('workspace-canvas');
     };
 
-    if (!hasEnteredApp) {
-        return <LandingPage onEnter={() => setHasEnteredApp(true)} />;
+    // ── Routing ─────────────────────────────────
+    if (appState === 'landing') {
+        return (
+            <LandingPage onEnter={() => setAppState('auth')} />
+        );
+    }
+
+    if (appState === 'auth') {
+        return (
+            <AuthPage
+                onAuth={(userInfo) => {
+                    setUser(userInfo);
+                    setAppState('app');
+                }}
+            />
+        );
     }
 
     return (
