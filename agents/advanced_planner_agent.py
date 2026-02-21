@@ -2,11 +2,11 @@
 Advanced planner agent with multi-step reasoning and dynamic replanning.
 Includes reflection, error recovery, and context-aware decision making.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Sequence
 from langchain.prompts import ChatPromptTemplate
 from agents.base_agent import BaseAgent, AgentState
 from tools.base_tool import BaseTool
-from llm_factory import create_llm
+from agents.llm_factory import create_llm
 import json
 
 
@@ -84,7 +84,7 @@ JSON format:
     
     def __init__(
         self,
-        tools: List[BaseTool],
+        tools: Sequence[BaseTool],
         model: Optional[str] = None,
         temperature: float = 0.5,  # Balanced for reasoning
         enable_reflection: bool = True

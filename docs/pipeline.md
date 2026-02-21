@@ -49,7 +49,15 @@ Deterministic workflow execution:
 - parallel processing of papers
 - planner-generated dynamic pipelines
 
----
+
+## Knowledge Graph Pipeline
+Purpose:
+- construct research knowledge graphs
+
+Responsibilities:
+- extract research entities
+- build relationship mappings
+- store structured research networks
 
 ## Future Pipelines
 
@@ -61,17 +69,6 @@ Responsibilities:
 - identify relevant researchers
 - generate personalized communication
 - manage outreach workflows
-
----
-
-### Knowledge Graph Pipeline (Planned)
-Purpose:
-- construct research knowledge graphs
-
-Responsibilities:
-- extract research entities
-- build relationship mappings
-- store structured research networks
 
 ---
 

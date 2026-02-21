@@ -1,5 +1,5 @@
 """
-Knowledge graph pipeline - Phase 5.
+Knowledge graph pipeline – Phase 5.
 Searches for papers, stores them in vector memory, and populates the Neo4j graph.
 """
 from typing import Dict, Any, List, Optional
@@ -28,6 +28,7 @@ class KnowledgeGraphPipeline:
         neo4j_password: Optional[str] = None,
     ):
         self.enable_memory = enable_memory
+        self.memory_pipeline: Optional[MemoryEnhancedPipeline] = None
 
         self.semantic_scholar = SemanticScholarTool(
             api_key=settings.semantic_scholar_api_key
@@ -158,7 +159,14 @@ class KnowledgeGraphPipeline:
         self, papers: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Store papers in FAISS vector store via MemoryEnhancedPipeline."""
+        if not self.enable_memory or self.memory_pipeline is None:
+            return {"error": "Memory not enabled", "papers_stored": 0}
+        
         try:
+            # Assert not None for type checker
+            assert self.memory_pipeline is not None
+            assert self.memory_pipeline.memory is not None
+            
             vector_ids = await self.memory_pipeline.memory.vector_store.add_papers_batch(papers)
             return {
                 "papers_stored": len(vector_ids),

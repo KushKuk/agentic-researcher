@@ -5,7 +5,8 @@ Phase 4: Semantic memory and knowledge base capabilities.
 from typing import Dict, Any, Optional, List
 import time
 from agents.advanced_planner_agent import AdvancedPlannerAgent
-from agents.memory_agent import MemoryAgent, AgentState
+from agents.memory_agent import MemoryAgent
+from agents.base_agent import AgentState
 from tools.semantic_scholar_tool import SemanticScholarTool
 from tools.pdf_downloader_tool import PDFDownloaderTool
 from tools.pdf_parser_tool import PDFParserTool
@@ -56,11 +57,10 @@ class MemoryEnhancedPipeline:
         )
         
         self.summarizer = SummarizationAgent()
+        self.memory: Optional[MemoryAgent] = None
         
         if enable_memory:
             self.memory = MemoryAgent()
-        else:
-            self.memory = None
     
     async def run(
         self,
@@ -122,7 +122,7 @@ class MemoryEnhancedPipeline:
             "reflection": state.metadata.get("reflection"),
             "memory_context_used": len(memory_context),
             "papers_stored_in_memory": len(stored_papers),
-            "memory_stats": self.memory.get_memory_stats() if self.enable_memory else None
+            "memory_stats": self.memory.get_memory_stats() if self.enable_memory and self.memory else None
         }
         
         return result
@@ -148,7 +148,7 @@ class MemoryEnhancedPipeline:
         
         # Step 1: Check memory for existing papers
         existing_papers = []
-        if self.enable_memory:
+        if self.enable_memory and self.memory:
             existing_papers = await self.memory.retrieve_relevant_papers(
                 query=query,
                 top_k=num_papers,
@@ -199,7 +199,7 @@ class MemoryEnhancedPipeline:
                 })
                 
                 # Store in memory
-                if self.enable_memory and store_in_memory:
+                if self.enable_memory and store_in_memory and self.memory:
                     await self.memory.store_paper(
                         paper_id=paper.get("paper_id", ""),
                         title=paper.get("title", ""),
@@ -219,7 +219,7 @@ class MemoryEnhancedPipeline:
             "new_papers_processed": len(summaries),
             "new_papers": summaries,
             "execution_time_seconds": execution_time,
-            "memory_stats": self.memory.get_memory_stats() if self.enable_memory else None
+            "memory_stats": self.memory.get_memory_stats() if self.enable_memory and self.memory else None
         }
     
     async def search_memory(
@@ -239,7 +239,7 @@ class MemoryEnhancedPipeline:
         Returns:
             Search results
         """
-        if not self.enable_memory:
+        if not self.enable_memory or not self.memory:
             return {
                 "success": False,
                 "error": "Memory not enabled for this pipeline"
@@ -336,11 +336,11 @@ class MemoryEnhancedPipeline:
         Returns:
             Statistics or None if memory disabled
         """
-        if self.enable_memory:
+        if self.enable_memory and self.memory:
             return self.memory.get_memory_stats()
         return None
     
     def clear_memory(self):
         """Clear all data from memory."""
-        if self.enable_memory:
+        if self.enable_memory and self.memory:
             self.memory.clear_memory()

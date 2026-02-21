@@ -8,8 +8,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from pipelines.research_pipeline import ResearchPipeline
 from pipelines.paper_summarization_pipeline import PaperSummarizationPipeline
-from pipelines.advanced_research_pipeline import AdvancedResearchPipeline
-from pipelines.advanced_research_pipeline import AdaptiveResearchPipeline
+from pipelines.advanced_research_pipeline import AdvancedResearchPipeline, AdaptiveResearchPipeline
 from pipelines.memory_enhanced_pipeline import MemoryEnhancedPipeline
 from pipelines.knowledge_graph_pipeline import KnowledgeGraphPipeline
 
@@ -27,7 +26,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -175,6 +174,8 @@ class MemorySummarizationRequest(BaseModel):
             }
         }
 
+
+# ── Phase 5: Knowledge Graph models ─────────────────────────────────────────
 
 class GraphBuildRequest(BaseModel):
     """Request to search papers and build the knowledge graph."""
@@ -683,17 +684,17 @@ async def clear_graph():
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    print("Agentic Research System starting...")
-    print(f"Environment: {settings.environment}")
-    print(f"Model: {settings.default_model}")
-    print("System ready!")
+    print("🚀 Agentic Research System starting...")
+    print(f"📍 Environment: {settings.environment}")
+    print(f"🔧 Model: {settings.default_model}")
+    print("✅ System ready!")
 
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on application shutdown."""
-    print("Agentic Research System shutting down...")
+    print("👋 Agentic Research System shutting down...")
 
 
 if __name__ == "__main__":
@@ -704,3 +705,115 @@ if __name__ == "__main__":
         port=settings.port,
         reload=settings.environment == "development"
     )
+
+
+# ── Citation endpoints ────────────────────────────────────────────────────────
+
+class CitedResearchRequest(BaseModel):
+    """Request for research with automatic citations."""
+    task: str
+    use_memory_context: bool = True
+    citation_format: str = "numbered"  # "numbered" or "inline"
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task": "Summarize recent advances in transformer models",
+                "citation_format": "numbered"
+            }
+        }
+
+
+class CitedSummarizationRequest(BaseModel):
+    """Request for paper summarization with citations."""
+    query: str
+    num_papers: int = 5
+    store_in_memory: bool = True
+    citation_format: str = "numbered"
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "attention mechanisms in NLP",
+                "num_papers": 5,
+                "citation_format": "numbered"
+            }
+        }
+
+
+class VerifyClaimsRequest(BaseModel):
+    """Request to verify summary claims against sources."""
+    summary: str
+    source_paper_ids: List[str]
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "summary": "Transformers use self-attention...",
+                "source_paper_ids": ["paper123", "paper456"]
+            }
+        }
+
+
+@app.post("/api/research/cited")
+async def research_with_citations(request: CitedResearchRequest):
+    """
+    Execute research with automatic citation attribution.
+    
+    Returns summary with each claim linked to its source paper.
+    """
+    try:
+        from pipelines.cited_research_pipeline import CitedResearchPipeline
+        
+        pipeline = CitedResearchPipeline(enable_memory=True)
+        result = await pipeline.run_with_citations(
+            task=request.task,
+            use_memory_context=request.use_memory_context,
+            citation_format=request.citation_format
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/summarize/cited")
+async def summarize_with_citations(request: CitedSummarizationRequest):
+    """
+    Summarize papers with citation attribution.
+    
+    Returns synthesis with each claim attributed to source papers,
+    includes bibliography and verification metrics.
+    """
+    try:
+        from pipelines.cited_research_pipeline import CitedResearchPipeline
+        
+        pipeline = CitedResearchPipeline(enable_memory=True)
+        result = await pipeline.summarize_with_citations(
+            query=request.query,
+            num_papers=request.num_papers,
+            store_in_memory=request.store_in_memory,
+            citation_format=request.citation_format
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/verify/claims")
+async def verify_claims(request: VerifyClaimsRequest):
+    """
+    Verify that summary claims are backed by specified source papers.
+    
+    Uses semantic similarity to match claims to papers from memory.
+    """
+    try:
+        from pipelines.cited_research_pipeline import CitedResearchPipeline
+        
+        pipeline = CitedResearchPipeline(enable_memory=True)
+        result = await pipeline.verify_claims(
+            summary=request.summary,
+            source_paper_ids=request.source_paper_ids
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")

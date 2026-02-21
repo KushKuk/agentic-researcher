@@ -13,9 +13,6 @@ Current capabilities include:
 - Planner-based agent workflow execution
 - Modular tool architecture
 - FastAPI backend for agent execution
-
-Future capabilities:
-
 - Multi-agent reasoning
 - Semantic memory with vector databases
 - Knowledge graph construction
@@ -37,9 +34,6 @@ User Request → FastAPI API → Pipeline → Planner Agent → Tools → Extern
 - LangGraph (agent orchestration)
 - Semantic Scholar API
 - Modular Tool Architecture
-
-Future:
-
 - FAISS (vector memory)
 - Neo4j (knowledge graph)
 - Sentence Transformers (embeddings)
@@ -100,6 +94,9 @@ agentic-researcher/
 ├── agents/
 ├── config/
 ├── docs/
+├── Frontend/
+├── graph/
+├── memory/
 ├── pipelines/
 ├── tools/
 └── requirements.txt
