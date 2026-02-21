@@ -39,11 +39,10 @@ Agents make decisions and control execution flow.
 Current Agents:
 - Planner Agent
 - Summarizer Agent
-
-Future Agents:
-
 - Outreach Agent
 - Self-Critique Agent
+- Knowledge Graph Agent
+- Memory Agent
 
 ---
 
@@ -52,8 +51,8 @@ Tools perform actions requested by agents.
 
 Examples:
 - Research search tool
-- Email automation tool (future)
-- Web automation tool (future)
+- Email automation tool
+- Web automation tool
 
 Agents do not directly call APIs.
 

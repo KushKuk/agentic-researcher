@@ -73,9 +73,7 @@ LLM-based structured analysis.
 
 ---
 
-## Future Agents
-
-### Outreach Agent (Planned)
+## Outreach Agent (Planned)
 
 Purpose:
 - generate personalized collaboration proposals
@@ -88,7 +86,7 @@ Responsibilities:
 
 ---
 
-### Self-Critique Agent (Planned)
+## Self-Critique Agent
 
 Purpose:
 - evaluate system outputs
@@ -101,7 +99,7 @@ Responsibilities:
 
 ---
 
-### Knowledge Graph Agent (Planned)
+## Knowledge Graph Agent
 
 Purpose:
 - construct research knowledge graphs
@@ -114,7 +112,7 @@ Responsibilities:
 
 ---
 
-### Memory Agent (Planned)
+## Memory Agent
 
 Purpose:
 - manage long-term semantic memory
