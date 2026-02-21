@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
 import '../../styles/auth.css';
+import ForgotPasswordFlow from './ForgotPasswordFlow';
 
 export default function AuthPage({ onAuth }) {
     const [mode, setMode] = useState('signup'); // 'login' | 'signup'
+    const [showForgot, setShowForgot] = useState(false);
     const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
     const [errors, setErrors] = useState({});
     const [animating, setAnimating] = useState(false);
+
+    // Show the forgot password / OTP flow
+    if (showForgot) {
+        return (
+            <ForgotPasswordFlow
+                onBack={() => { setShowForgot(false); setMode('login'); }}
+                onDone={() => { setShowForgot(false); setMode('login'); }}
+            />
+        );
+    }
 
     const switchMode = (next) => {
         if (next === mode) return;
@@ -124,7 +136,7 @@ export default function AuthPage({ onAuth }) {
                             />
                             {errors.password && <span className="auth-error">{errors.password}</span>}
                             {mode === 'login' && (
-                                <button type="button" className="auth-forgot-link">Forgot password?</button>
+                                <button type="button" className="auth-forgot-link" onClick={() => setShowForgot(true)}>Forgot password?</button>
                             )}
                         </div>
 
