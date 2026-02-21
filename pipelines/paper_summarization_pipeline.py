@@ -8,7 +8,7 @@ from agents.summarization_agent import SummarizationAgent
 from tools.semantic_scholar_tool import SemanticScholarTool
 from tools.pdf_downloader_tool import PDFDownloaderTool
 from tools.pdf_parser_tool import PDFParserTool
-from config.config_settings import settings
+from config.settings import settings
 
 
 class PaperSummarizationPipeline:

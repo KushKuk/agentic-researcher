@@ -6,7 +6,7 @@ from typing import Dict, Any
 from agents.planner_agent import PlannerAgent
 from agents.base_agent import AgentState
 from tools.semantic_scholar_tool import SemanticScholarTool
-from config.config_settings import settings
+from config.settings import settings
 
 
 class ResearchPipeline:
