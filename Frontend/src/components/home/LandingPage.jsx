@@ -35,12 +35,11 @@ const LandingPage = ({ onEnter }) => {
                         <span className="dot"></span> AI Research Assistant - Now in Public Beta <span className="badge-new">NEW</span>
                     </div>
                     <h1 className="landing-title">
-                        Start fast.<br />
-                        <span className="text-green">Stay organized.</span>
+                        Read the literature.<br />
+                        <span className="text-green">Model the science.</span>
                     </h1>
                     <p className="landing-subtitle">
-                        The ultimate AI-powered workspace for your research. Collect,
-                        synthesize, and connect your thoughts in an <strong>infinite spatial canvas</strong>.
+                        Clarity decomposes research papers into claims, evidence, methods, and limitations - then lets you structure, connect, and refine them inside an <strong>intelligent canvas</strong> built for academic reasoning.
                     </p>
                     <div className="landing-cta-group">
                         <button className="btn-primary landing-btn-lg" onClick={onEnter}>
@@ -71,9 +70,10 @@ const LandingPage = ({ onEnter }) => {
                     <div className="product-demo-label">
                         <span className="dot"></span> SEE HOW IT WORKS
                     </div>
-                    <h2 className="section-title" style={{ marginBottom: '16px' }}>Two powerful modes,<br /> one seamless workflow.</h2>
+                    <h2 className="section-title" style={{ marginBottom: '16px' }}>Two ways to engage the literature,<br /> One continuous research framework.</h2>
                     <p className="section-subtitle" style={{ marginBottom: '60px' }}>
-                        Clarity lets you move fluidly between a structured Summary Report and a free-form Infinite Canvas.
+                        Start with a structured synthesis of the literature.
+Then enter the canvas to isolate claims, examine evidence, and construct your own research logic.
                     </p>
 
                     <div className="dual-mode-showcase">
@@ -234,8 +234,8 @@ const LandingPage = ({ onEnter }) => {
                                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
                                     </svg>
                                 </div>
-                                <h3>AI-Powered Synthesis</h3>
-                                <p>Automatically reads, summarizes, and cross-references dozens of papers. Get research-grade summaries in seconds, not hours.</p>
+                                <h3>Structured Literature Reasoning</h3>
+                                <p>Extract claims, evidence, methods, and limitations from each paper - then analyze how they align, conflict, and diverge across the literature.</p>
                                 <div className="bento-mock-ui">
                                     <div className="mock-ui-header">
                                         <span>Synthesis Progress</span>
@@ -311,7 +311,7 @@ const LandingPage = ({ onEnter }) => {
                                     </svg>
                                 </div>
                                 <h3>Infinite Canvas</h3>
-                                <p>An unbounded, zoomable spatial workspace. Drag, arrange, and connect your research nodes exactly the way your mind works.</p>
+                                <p>The canvas transforms synthesis into an interactive reasoning environment. Isolate claims, connect supporting and conflicting findings, insert your own cards, and construct argument chains grounded in source-traceable evidence. It is not a whiteboard - it is a workspace built for academic logic.</p>
                                 <div className="bento-mock-canvas">
                                     <div className="mock-node mn-1">Node 1</div>
                                     <div className="mock-node mn-2">Node 2</div>
