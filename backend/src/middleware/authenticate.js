@@ -1,23 +1,30 @@
 /**
  * middleware/authenticate.js
  * Verifies the JWT access token from the HttpOnly cookie.
- * Attaches the decoded payload to req.user.
- *
- * Does NOT query the database — purely stateless token verification.
+ * Fetches user from DB to enforce soft-delete + account version checks.
+ * Attaches { id, email } to req.user.
  */
 
 import jwt from 'jsonwebtoken';
+import { getPrisma } from '../config/prisma.js';
+
+const ACCESS_COOKIE = 'access_token';
+const REFRESH_COOKIE = 'refresh_token';
 
 /**
  * Express middleware that guards protected routes.
  *
- * Reads `access_token` cookie → verifies JWT → attaches req.user.
- * Returns 401 on missing, invalid, or expired token.
+ * 1. Reads `access_token` cookie → verifies JWT.
+ * 2. DB-fetches user to check isDeleted and accountVersion.
+ *    - !user            → 401 (account gone)
+ *    - user.isDeleted   → 401 + cookie clear
+ *    - decoded.v !== accountVersion → 401 + cookie clear (global session invalidation)
+ * 3. Attaches req.user = { id, email }
  *
  * @type {import('express').RequestHandler}
  */
-export const authenticate = (req, res, next) => {
-    const token = req.cookies?.access_token;
+export const authenticate = async (req, res, next) => {
+    const token = req.cookies?.[ACCESS_COOKIE];
 
     if (!token) {
         return res.status(401).json({
@@ -26,21 +33,39 @@ export const authenticate = (req, res, next) => {
         });
     }
 
+    let decoded;
     try {
-        const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-
-        // Attach a clean user object — only what downstream handlers need
-        req.user = {
-            id: decoded.sub,
-            email: decoded.email,
-        };
-
-        next();
-    } catch (err) {
-        // Covers TokenExpiredError, JsonWebTokenError, NotBeforeError
+        decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    } catch {
         return res.status(401).json({
             status: 'error',
             message: 'Invalid or expired token. Please log in again.',
+        });
+    }
+
+    try {
+        const prisma = getPrisma();
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.sub },
+            select: { id: true, email: true, isDeleted: true, accountVersion: true },
+        });
+
+        if (!user || user.isDeleted || decoded.v !== user.accountVersion) {
+            res.clearCookie(ACCESS_COOKIE);
+            res.clearCookie(REFRESH_COOKIE);
+            return res.status(401).json({
+                status: 'error',
+                message: 'Session invalidated. Please log in again.',
+            });
+        }
+
+        // accountVersion is intentionally NOT forwarded to req.user
+        req.user = { id: user.id, email: user.email };
+        next();
+    } catch {
+        return res.status(500).json({
+            status: 'error',
+            message: 'Internal Server Error',
         });
     }
 };

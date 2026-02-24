@@ -94,7 +94,7 @@ const passwordResetKey = (email) => `reset:${email}`;
 
 function signAccessToken(user) {
     return jwt.sign(
-        { sub: user.id, email: user.email },
+        { sub: user.id, email: user.email, v: user.accountVersion },
         process.env.JWT_ACCESS_SECRET,
         { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL }
     );
@@ -234,9 +234,22 @@ export const verifyEmail = asyncHandler(async (req, res) => {
 
     try {
         const prisma = getPrisma();
-        const user = await prisma.user.create({
-            data: { email: normalizedEmail, passwordHash: pending.passwordHash, emailVerified: true },
-            select: { id: true },
+
+        const user = await prisma.$transaction(async (tx) => {
+            const created = await tx.user.create({
+                data: { email: normalizedEmail, passwordHash: pending.passwordHash, emailVerified: true },
+                select: { id: true },
+            });
+
+            await tx.userProfile.create({
+                data: { userId: created.id, fullName: pending.fullName },
+            });
+
+            await tx.userPreferences.create({
+                data: { userId: created.id },
+            });
+
+            return created;
         });
 
         await redis.del(key);
@@ -320,10 +333,10 @@ export const login = asyncHandler(async (req, res) => {
     const prisma = getPrisma();
     const user = await prisma.user.findUnique({
         where: { email: normalizedEmail },
-        select: { id: true, email: true, passwordHash: true },
+        select: { id: true, email: true, passwordHash: true, isDeleted: true, accountVersion: true },
     });
 
-    if (!user) {
+    if (!user || user.isDeleted) {
         logger.warn({ event: 'login_failure', email: normalizedEmail, ip, reason: 'user_not_found' });
         return res.status(401).json({ status: 'error', message: 'Invalid email or password.' });
     }
@@ -367,7 +380,7 @@ export const refresh = asyncHandler(async (req, res) => {
 
     const stored = await prisma.refreshToken.findFirst({
         where: { tokenHash },
-        include: { user: { select: { id: true, email: true } } },
+        include: { user: { select: { id: true, email: true, isDeleted: true, accountVersion: true } } },
     });
 
     // ── Reuse detection ─────────────────────────────────────────────────────
@@ -414,6 +427,33 @@ export const refresh = asyncHandler(async (req, res) => {
         return res.status(401).json({
             status: 'error',
             message: 'Session expired. Please log in again.',
+        });
+    }
+
+    // ── Soft-delete + account version guard ──────────────────────────────────
+    // Decode the raw refresh token cookie to extract the embedded version claim.
+    // We use the access token's version claim for this check by re-reading it.
+    // Since the refresh token itself is an opaque random token (not a JWT),
+    // we validate using the stored user's DB accountVersion vs the access token.
+    let tokenAccountVersion = null;
+    try {
+        const rawAccessToken = req.cookies?.access_token;
+        if (rawAccessToken) {
+            const decoded = jwt.verify(rawAccessToken, process.env.JWT_ACCESS_SECRET, { ignoreExpiration: true });
+            tokenAccountVersion = decoded.v ?? null;
+        }
+    } catch { /* access token may be absent or malformed — proceed to DB check only */ }
+
+    if (
+        stored.user.isDeleted ||
+        (tokenAccountVersion !== null && tokenAccountVersion !== stored.user.accountVersion)
+    ) {
+        await prisma.refreshToken.delete({ where: { id: stored.id } });
+        clearAuthCookies(res);
+        logger.warn({ event: 'refresh_failure', userId: stored.user.id, ip, reason: stored.user.isDeleted ? 'account_deleted' : 'version_mismatch' });
+        return res.status(401).json({
+            status: 'error',
+            message: 'Session invalidated. Please log in again.',
         });
     }
 
@@ -567,7 +607,10 @@ export const passwordReset = asyncHandler(async (req, res) => {
     await prisma.$transaction([
         prisma.user.update({
             where: { id: stored.userId },
-            data: { passwordHash },
+            data: {
+                passwordHash,
+                accountVersion: { increment: 1 },   // invalidates all issued JWTs
+            },
         }),
         prisma.refreshToken.deleteMany({
             where: { userId: stored.userId },
@@ -583,4 +626,36 @@ export const passwordReset = asyncHandler(async (req, res) => {
         status: 'success',
         message: 'Password reset successfully. Please log in again.',
     });
+});
+
+/**
+ * GET /auth/me
+ * Returns the current authenticated user, or null if no valid session exists.
+ * Returns 200 OK even if unauthenticated to prevent browser console 401 error noise on initial load.
+ */
+export const getMe = asyncHandler(async (req, res) => {
+    const token = req.cookies?.[ACCESS_COOKIE];
+    if (!token) {
+        return res.status(200).json({ status: 'success', data: { user: null } });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+        const prisma = getPrisma();
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.sub },
+            select: { id: true, email: true, isDeleted: true, accountVersion: true }
+        });
+
+        if (!user || user.isDeleted || decoded.v !== user.accountVersion) {
+            return res.status(200).json({ status: 'success', data: { user: null } });
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            data: { user: { id: user.id, email: user.email } }
+        });
+    } catch {
+        return res.status(200).json({ status: 'success', data: { user: null } });
+    }
 });

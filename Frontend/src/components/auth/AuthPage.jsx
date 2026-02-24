@@ -1,20 +1,28 @@
 import React, { useState } from 'react';
 import '../../styles/auth.css';
 import ForgotPasswordFlow from './ForgotPasswordFlow';
+import { useAuth } from '../../api/AuthContext';
 
-export default function AuthPage({ onAuth }) {
-    const [mode, setMode] = useState('signup'); // 'login' | 'signup'
+export default function AuthPage() {
+    const { login, signup, verifyEmail } = useAuth();
+
+    // 'login' | 'signup' | 'otp'
+    const [mode, setMode] = useState('signup');
     const [showForgot, setShowForgot] = useState(false);
-    const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
-    const [errors, setErrors] = useState({});
-    const [animating, setAnimating] = useState(false);
 
-    // Show the forgot password / OTP flow
+    // form state
+    const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', otp: '' });
+    const [errors, setErrors] = useState({});
+    const [apiError, setApiError] = useState('');
+    const [animating, setAnimating] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    // Show the forgot password flow
     if (showForgot) {
         return (
             <ForgotPasswordFlow
-                onBack={() => { setShowForgot(false); setMode('login'); }}
-                onDone={() => { setShowForgot(false); setMode('login'); }}
+                onBack={() => { setShowForgot(false); setMode('login'); setApiError(''); }}
+                onDone={() => { setShowForgot(false); setMode('login'); setApiError(''); }}
             />
         );
     }
@@ -23,9 +31,11 @@ export default function AuthPage({ onAuth }) {
         if (next === mode) return;
         setAnimating(true);
         setErrors({});
+        setApiError('');
         setTimeout(() => {
             setMode(next);
-            setForm({ name: '', email: '', password: '', confirm: '' });
+            // Only clear password fields so email persists if they toggle back and forth
+            setForm(p => ({ ...p, password: '', confirm: '', otp: '' }));
             setAnimating(false);
         }, 220);
     };
@@ -33,20 +43,43 @@ export default function AuthPage({ onAuth }) {
     const validate = () => {
         const e = {};
         if (mode === 'signup' && !form.name.trim()) e.name = 'Name is required';
-        if (!form.email.trim()) e.email = 'Email is required';
-        else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email';
-        if (!form.password) e.password = 'Password is required';
-        else if (form.password.length < 6) e.password = 'Min 6 characters';
+        if (mode !== 'otp') {
+            if (!form.email.trim()) e.email = 'Email is required';
+            else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email';
+            if (!form.password) e.password = 'Password is required';
+            else if (form.password.length < 6) e.password = 'Min 6 characters';
+        }
         if (mode === 'signup' && form.password !== form.confirm) e.confirm = 'Passwords do not match';
+        if (mode === 'otp' && form.otp.length < 6) e.otp = 'Enter 6-digit code';
         return e;
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         const errs = validate();
         if (Object.keys(errs).length) { setErrors(errs); return; }
-        // Stub: call onAuth with user info
-        onAuth({ name: form.name || form.email.split('@')[0], email: form.email, mode });
+
+        setErrors({});
+        setApiError('');
+        setSubmitting(true);
+
+        try {
+            if (mode === 'signup') {
+                await signup(form.name, form.email, form.password);
+                setMode('otp'); // Switch to OTP collection view
+            } else if (mode === 'login') {
+                await login(form.email, form.password);
+                // App.jsx will automatically redirect via useAuth user state
+            } else if (mode === 'otp') {
+                await verifyEmail(form.email, form.otp);
+                // After verification backend created the user. Now login to get session cookies
+                await login(form.email, form.password);
+            }
+        } catch (err) {
+            setApiError(err.message || 'An error occurred');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const set = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }));
@@ -95,8 +128,14 @@ export default function AuthPage({ onAuth }) {
                 {/* Glass card */}
                 <div className={`auth-card ${animating ? 'auth-card--fade' : ''}`}>
                     <h2 className="auth-card-title">
-                        {mode === 'signup' ? 'Create Account' : 'Sign In'}
+                        {mode === 'signup' ? 'Create Account' : mode === 'login' ? 'Sign In' : 'Check your email'}
                     </h2>
+
+                    {apiError && (
+                        <div className="auth-error" style={{ marginBottom: '16px', padding: '12px', background: 'rgba(255,50,50,0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                            {apiError}
+                        </div>
+                    )}
 
                     <form className="auth-form" onSubmit={handleSubmit} noValidate>
                         {mode === 'signup' && (
@@ -113,32 +152,38 @@ export default function AuthPage({ onAuth }) {
                             </div>
                         )}
 
-                        <div className="auth-field">
-                            <input
-                                className={`auth-input ${errors.email ? 'auth-input--error' : ''}`}
-                                type="email"
-                                placeholder="Email address"
-                                value={form.email}
-                                onChange={set('email')}
-                                autoComplete="email"
-                            />
-                            {errors.email && <span className="auth-error">{errors.email}</span>}
-                        </div>
+                        {mode !== 'otp' && (
+                            <div className="auth-field">
+                                <input
+                                    className={`auth-input ${errors.email ? 'auth-input--error' : ''}`}
+                                    type="email"
+                                    placeholder="Email address"
+                                    value={form.email}
+                                    onChange={set('email')}
+                                    autoComplete="email"
+                                    disabled={submitting}
+                                />
+                                {errors.email && <span className="auth-error">{errors.email}</span>}
+                            </div>
+                        )}
 
-                        <div className="auth-field">
-                            <input
-                                className={`auth-input ${errors.password ? 'auth-input--error' : ''}`}
-                                type="password"
-                                placeholder="Password"
-                                value={form.password}
-                                onChange={set('password')}
-                                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                            />
-                            {errors.password && <span className="auth-error">{errors.password}</span>}
-                            {mode === 'login' && (
-                                <button type="button" className="auth-forgot-link" onClick={() => setShowForgot(true)}>Forgot password?</button>
-                            )}
-                        </div>
+                        {mode !== 'otp' && (
+                            <div className="auth-field">
+                                <input
+                                    className={`auth-input ${errors.password ? 'auth-input--error' : ''}`}
+                                    type="password"
+                                    placeholder="Password"
+                                    value={form.password}
+                                    onChange={set('password')}
+                                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                                    disabled={submitting}
+                                />
+                                {errors.password && <span className="auth-error">{errors.password}</span>}
+                                {mode === 'login' && (
+                                    <button type="button" className="auth-forgot-link" onClick={() => setShowForgot(true)}>Forgot password?</button>
+                                )}
+                            </div>
+                        )}
 
                         {mode === 'signup' && (
                             <div className="auth-field">
@@ -149,13 +194,41 @@ export default function AuthPage({ onAuth }) {
                                     value={form.confirm}
                                     onChange={set('confirm')}
                                     autoComplete="new-password"
+                                    disabled={submitting}
                                 />
                                 {errors.confirm && <span className="auth-error">{errors.confirm}</span>}
                             </div>
                         )}
 
-                        <button className="auth-btn-primary" type="submit">
-                            {mode === 'signup' ? 'Create Account' : 'Sign In'}
+                        {mode === 'otp' && (
+                            <div className="auth-field">
+                                <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '12px' }}>
+                                    We sent a 6-digit code to <strong>{form.email}</strong>.
+                                </p>
+                                <input
+                                    className={`auth-input ${errors.otp ? 'auth-input--error' : ''}`}
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    placeholder="Enter 6-digit code"
+                                    value={form.otp}
+                                    onChange={set('otp')}
+                                    autoFocus
+                                    disabled={submitting}
+                                    style={{ letterSpacing: '4px', textAlign: 'center', fontSize: '18px' }}
+                                />
+                                {errors.otp && <span className="auth-error" style={{ textAlign: 'center' }}>{errors.otp}</span>}
+                            </div>
+                        )}
+
+                        <button className="auth-btn-primary" type="submit" disabled={submitting}>
+                            {submitting
+                                ? 'Please wait...'
+                                : mode === 'signup'
+                                    ? 'Create Account'
+                                    : mode === 'login'
+                                        ? 'Sign In'
+                                        : 'Verify Email'}
                         </button>
                     </form>
 

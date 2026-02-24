@@ -13,6 +13,8 @@ import cookieParser from 'cookie-parser';
 import healthRouter from './routes/health.js';
 import infraRouter from './routes/infra.js';
 import authRouter from './routes/auth.js';
+import workspaceRouter from './routes/workspace.routes.js';
+import settingsRouter from './routes/settings.routes.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -39,6 +41,8 @@ app.use(cookieParser());
 app.use('/health', healthRouter);
 app.use('/', infraRouter);          // /test-db  /test-redis
 app.use('/auth', authRouter);       // /auth/signup /auth/login /auth/refresh …
+app.use('/api/workspaces', workspaceRouter);
+app.use('/api/settings', settingsRouter);
 
 // ── 404 catch-all ─────────────────────────────────────────
 app.use(notFound);

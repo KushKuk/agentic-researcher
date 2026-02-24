@@ -17,10 +17,24 @@ import WorkspaceCanvas from './components/workspaces/WorkspaceCanvas';
 import LandingPage from './components/home/LandingPage';
 import AuthPage from './components/auth/AuthPage';
 
+import { useAuth } from './api/AuthContext';
+
 function App() {
-    // 'landing' | 'auth' | 'app'
+    const { user, loading } = useAuth();
+    // 'landing' | 'auth' | 'app' 
+    // We start assuming we are in the landing state until we know the user is authenticated
     const [appState, setAppState] = useState('landing');
-    const [user, setUser] = useState(null);
+
+    // Auto-login if session is detected on load
+    useEffect(() => {
+        if (!loading && user) {
+            setAppState('app');
+            showToast('Welcome back', `Logged in as ${user.email}`);
+        } else if (!loading && !user && appState === 'app') {
+            // We lost session while trying to get into the app. Fallback explicitly
+            setAppState('auth');
+        }
+    }, [user, loading]);
 
     const [activeTab, setActiveTab] = useState('home');
     const [modalOpen, setModalOpen] = useState(false);
@@ -121,20 +135,23 @@ function App() {
     };
 
     // ── Routing ─────────────────────────────────
-    if (appState === 'landing') {
+    if (loading) {
+        return (
+            <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', color: 'var(--muted)' }}>
+                <span>Loading Clarity...</span>
+            </div>
+        );
+    }
+
+    if (appState === 'landing' && !user) {
         return (
             <LandingPage onEnter={() => setAppState('auth')} />
         );
     }
 
-    if (appState === 'auth') {
+    if (appState === 'auth' && !user) {
         return (
-            <AuthPage
-                onAuth={(userInfo) => {
-                    setUser(userInfo);
-                    setAppState('app');
-                }}
-            />
+            <AuthPage />
         );
     }
 

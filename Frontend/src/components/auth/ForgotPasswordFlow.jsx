@@ -7,14 +7,22 @@ function StepEmail({ onNext, onBack }) {
     const [error, setError] = useState('');
     const [sent, setSent] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!email.trim()) return setError('Email is required');
         if (!/\S+@\S+\.\S+/.test(email)) return setError('Enter a valid email');
+
         setError('');
         setSent(true);
-        // Simulate sending OTP
-        setTimeout(() => onNext(email), 900);
+
+        try {
+            await requestPasswordReset(email);
+            // Always proceed to OTP stage to prevent email enumeration, matching backend logic
+            onNext(email);
+        } catch (err) {
+            setError(err.message || 'Error requesting reset');
+            setSent(false); // allow retry
+        }
     };
 
     return (
@@ -87,15 +95,20 @@ function StepOTP({ email, onNext, onBack }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (digits.some(d => !d)) return setError('Please enter all 6 digits');
-        setVerifying(true);
-        // Simulate verification
-        setTimeout(() => { setVerifying(false); onNext(); }, 800);
+        const code = digits.join('');
+        if (code.length < OTP_LEN) return setError('Please enter all 6 digits');
+        // Backend expects otp + newPassword together. Just pass OTP forward.
+        onNext(code);
     };
 
-    const handleResend = () => {
-        setResent(true);
-        setTimeout(() => setResent(false), 3000);
+    const handleResend = async () => {
+        try {
+            await requestPasswordReset(email);
+            setResent(true);
+            setTimeout(() => setResent(false), 3000);
+        } catch (err) {
+            setError('Failed to resend code');
+        }
     };
 
     const filled = digits.filter(Boolean).length;
@@ -155,21 +168,34 @@ function StepReset({ onDone }) {
 
     const set = field => e => setForm(p => ({ ...p, [field]: e.target.value }));
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         const errs = {};
         if (!form.password) errs.password = 'Password is required';
         else if (form.password.length < 6) errs.password = 'Min 6 characters';
         if (form.password !== form.confirm) errs.confirm = 'Passwords do not match';
+
         if (Object.keys(errs).length) return setErrors(errs);
+
         setSaving(true);
-        setTimeout(() => onDone(), 800);
+        try {
+            await resetPassword(email, otp, form.password);
+            onDone();
+        } catch (err) {
+            setErrors({ api: err.message || 'Failed to reset password' });
+            setSaving(false);
+        }
     };
 
     return (
         <>
             <h2 className="auth-card-title">New password</h2>
             <p className="auth-card-subtitle">Choose a strong password for your account.</p>
+            {errors.api && (
+                <div className="auth-error" style={{ marginBottom: '16px', padding: '12px', background: 'rgba(255,50,50,0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                    {errors.api}
+                </div>
+            )}
             <form className="auth-form" onSubmit={handleSubmit} noValidate>
                 <div className="auth-field">
                     <input
@@ -204,8 +230,11 @@ function StepReset({ onDone }) {
 
 /* ── Root: orchestrates the 3 steps ─────────────── */
 export default function ForgotPasswordFlow({ onBack, onDone }) {
+    const { requestPasswordReset, resetPassword } = useAuth();
+
     const [step, setStep] = useState('email');   // 'email' | 'otp' | 'reset' | 'success'
     const [email, setEmail] = useState('');
+    const [otp, setOtp] = useState('');
     const [animating, setAnimating] = useState(false);
 
     const go = (next) => {
@@ -216,11 +245,25 @@ export default function ForgotPasswordFlow({ onBack, onDone }) {
     const stepContent = () => {
         switch (step) {
             case 'email':
-                return <StepEmail onNext={mail => { setEmail(mail); go('otp'); }} onBack={onBack} />;
+                return <StepEmail
+                    requestPasswordReset={requestPasswordReset}
+                    onNext={mail => { setEmail(mail); go('otp'); }}
+                    onBack={onBack}
+                />;
             case 'otp':
-                return <StepOTP email={email} onNext={() => go('reset')} onBack={() => go('email')} />;
+                return <StepOTP
+                    email={email}
+                    requestPasswordReset={requestPasswordReset}
+                    onNext={(code) => { setOtp(code); go('reset'); }}
+                    onBack={() => go('email')}
+                />;
             case 'reset':
-                return <StepReset onDone={() => go('success')} />;
+                return <StepReset
+                    email={email}
+                    otp={otp}
+                    resetPassword={resetPassword}
+                    onDone={() => go('success')}
+                />;
             case 'success':
                 return (
                     <div className="auth-success">

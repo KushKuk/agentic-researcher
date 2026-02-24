@@ -20,6 +20,7 @@ import {
     logout,
     passwordResetRequest,
     passwordReset,
+    getMe,
 } from '../controllers/authController.js';
 import { authenticate } from '../middleware/authenticate.js';
 import {
@@ -49,11 +50,6 @@ router.post('/password-reset-request', passwordResetRequestLimiter, passwordRese
 router.post('/password-reset', passwordResetLimiter, passwordReset);
 
 // ── Protected ─────────────────────────────────────────────
-router.get('/me', authenticate, (req, res) => {
-    res.status(200).json({
-        status: 'success',
-        data: { user: req.user },
-    });
-});
+router.get('/me', getMe);
 
 export default router;

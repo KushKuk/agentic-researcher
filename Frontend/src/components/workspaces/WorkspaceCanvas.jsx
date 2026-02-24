@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ReactFlow,
     Controls,
@@ -97,7 +97,10 @@ const initialEdges = [
 ];
 
 const STORAGE_KEY = 'agentic_researcher_canvas_data';
-const WorkspaceCanvas = ({ onBack }) => {
+
+// Workspace ID must be passed as a prop once backend integration is live.
+// For now, it is read from the prop and savves are no-ops if absent.
+const WorkspaceCanvas = ({ onBack, workspaceId }) => {
     // Lazily initialize state from LocalStorage if it exists
     const [nodes, setNodes, onNodesChange] = useNodesState(() => {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -126,14 +129,84 @@ const WorkspaceCanvas = ({ onBack }) => {
     // History Hook
     const { takeSnapshot, undo, redo, canUndo, canRedo } = useHistory();
 
-    // Auto-save mechanism triggered anytime nodes or edges arrays mutate
+    // ── Autosave: single-slot queue model ──────────────────────────────────
+    const [isSaving, setIsSaving] = useState(false);
+    const [hasPendingSave, setHasPendingSave] = useState(false);
+    const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'conflict' | null
+    const latestStateRef = useRef({ nodes: [], edges: [], version: 1 });
+    const isSavingRef = useRef(false);       // mirrors isSaving without stale-closure issues
+    const hasPendingRef = useRef(false);     // mirrors hasPendingSave
+
+    // Keep version in a ref so saveCanvas always reads the latest value
+    const versionRef = useRef(1);
+
+    const saveCanvas = useCallback(async () => {
+        if (!workspaceId) return;            // no-op until backend is wired
+
+        if (isSavingRef.current) {
+            hasPendingRef.current = true;
+            setHasPendingSave(true);
+            return;
+        }
+
+        isSavingRef.current = true;
+        setIsSaving(true);
+
+        const { nodes: n, edges: e } = latestStateRef.current;
+
+        try {
+            const res = await fetch(`/api/workspaces/${workspaceId}/canvas`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ nodes: n, edges: e, version: versionRef.current }),
+            });
+
+            const json = await res.json();
+
+            if (res.ok) {
+                // Update version from server response
+                versionRef.current = json.data.version;
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus(null), 2000);
+            } else if (res.status === 409) {
+                // Version conflict: replace local state with server's authoritative state
+                versionRef.current = json.data.version;
+                setNodes(json.data.nodes);
+                setEdges(json.data.edges);
+                setSaveStatus('conflict');
+                setTimeout(() => setSaveStatus(null), 3000);
+            }
+            // 400 / 500 are silently ignored per spec (no logging yet)
+        } catch (_err) {
+            // Network error — silently swallow
+        } finally {
+            isSavingRef.current = false;
+            setIsSaving(false);
+
+            if (hasPendingRef.current) {
+                hasPendingRef.current = false;
+                setHasPendingSave(false);
+                saveCanvas();
+            }
+        }
+    }, [workspaceId]); // setNodes/setEdges are stable refs from useNodesState/useEdgesState
+
+    // Keep latestStateRef in sync on every render (no extra re-render cost)
+    useEffect(() => {
+        latestStateRef.current = { nodes, edges, version: versionRef.current };
+    });
+
+    // Debounced autosave — fires 800ms after nodes/edges settle
+    useEffect(() => {
+        const timer = setTimeout(() => saveCanvas(), 800);
+        return () => clearTimeout(timer);
+    }, [nodes, edges, saveCanvas]);
+
+    // Legacy localStorage persistence (kept alongside backend save)
     useEffect(() => {
         if (nodes.length > 0) {
-            const dataToSave = {
-                nodes: nodes,
-                edges: edges,
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
         }
     }, [nodes, edges]);
 
@@ -141,14 +214,18 @@ const WorkspaceCanvas = ({ onBack }) => {
         (params) => {
             takeSnapshot(nodes, edges);
             setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: 'rgba(0, 148, 54, 0.4)', strokeWidth: 2 } }, eds));
+            saveCanvas();
         },
-        [setEdges, nodes, edges, takeSnapshot],
+        [setEdges, nodes, edges, takeSnapshot, saveCanvas],
     );
 
     const onNodeDragStart = useCallback(() => {
-        // Capture state right before user drags a node
         takeSnapshot(nodes, edges);
     }, [nodes, edges, takeSnapshot]);
+
+    const onNodeDragStop = useCallback(() => {
+        saveCanvas();
+    }, [saveCanvas]);
 
     // Deletion Modal State
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -170,6 +247,7 @@ const WorkspaceCanvas = ({ onBack }) => {
         ));
         setDeleteModalOpen(false);
         setNodesToDelete([]);
+        saveCanvas();
     };
 
     const cancelDelete = () => {
@@ -276,6 +354,7 @@ const WorkspaceCanvas = ({ onBack }) => {
 
         takeSnapshot(nodes, edges);
         setNodes((nds) => nds.map(n => ({ ...n, selected: false })).concat({ ...newNode, selected: true }));
+        saveCanvas();
     };
 
     // Grouping
@@ -317,11 +396,30 @@ const WorkspaceCanvas = ({ onBack }) => {
         });
 
         setNodes([...updatedNodes, groupNode]);
+        saveCanvas();
     };
 
     return (
         <ReactFlowProvider>
             <div className="canvas-container">
+                {/* Save status indicator */}
+                {saveStatus && (
+                    <div style={{
+                        position: 'absolute', top: '24px', right: '24px', zIndex: 10,
+                        padding: '6px 14px', borderRadius: '8px', fontSize: '13px',
+                        fontWeight: 500, backdropFilter: 'blur(10px)',
+                        background: saveStatus === 'conflict'
+                            ? 'rgba(239,68,68,0.12)'
+                            : 'rgba(0,148,54,0.12)',
+                        color: saveStatus === 'conflict' ? '#ef4444' : '#009436',
+                        border: `1px solid ${saveStatus === 'conflict' ? 'rgba(239,68,68,0.3)' : 'rgba(0,148,54,0.3)'}`,
+                        boxShadow: '0 4px 12px rgba(2,6,23,0.08)',
+                        transition: 'opacity 0.3s',
+                    }}>
+                        {saveStatus === 'conflict' ? '⚠ Conflict — canvas refreshed from server' : '✓ Saved'}
+                    </div>
+                )}
+
                 {/* Back Button */}
                 {onBack && (
                     <div style={{ position: 'absolute', top: '24px', left: '24px', zIndex: 10 }}>
@@ -397,6 +495,7 @@ const WorkspaceCanvas = ({ onBack }) => {
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     onNodeDragStart={onNodeDragStart}
+                    onNodeDragStop={onNodeDragStop}
                     onNodesDelete={onNodesDelete}
                     nodeTypes={nodeTypes}
                     onInit={setRfInstance}

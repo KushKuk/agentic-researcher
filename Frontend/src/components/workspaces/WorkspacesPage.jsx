@@ -1,7 +1,64 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import '../../styles/global.css';
 
-const WorkspacesPage = ({ workspaces, onCreateClick, onOpenWorkspace }) => {
+const WorkspacesPage = ({ onCreateClick, onOpenWorkspace }) => {
+    const [workspaces, setWorkspaces] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // ── Fetch on mount ──────────────────────────────────────────────────────
+    useEffect(() => {
+        const fetchWorkspaces = async () => {
+            try {
+                const res = await fetch('/api/workspaces', { credentials: 'include' });
+                if (res.ok) {
+                    const json = await res.json();
+                    setWorkspaces(json.data ?? []);
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchWorkspaces();
+    }, []);
+
+    // ── Rename ──────────────────────────────────────────────────────────────
+    const handleRename = async (ws, e) => {
+        e.stopPropagation();
+        const newName = window.prompt('Enter new name:', ws.name);
+        if (!newName || newName.trim() === ws.name) return;
+
+        const res = await fetch(`/api/workspaces/${ws.id}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName.trim() }),
+        });
+
+        if (res.ok) {
+            const json = await res.json();
+            setWorkspaces((prev) =>
+                prev.map((w) => w.id === ws.id ? { ...w, name: json.data.name, updatedAt: json.data.updatedAt } : w)
+            );
+        } else if (res.status === 409) {
+            window.alert('Name already exists. Please choose a different name.');
+        }
+    };
+
+    // ── Delete ──────────────────────────────────────────────────────────────
+    const handleDelete = async (ws, e) => {
+        e.stopPropagation();
+        if (!window.confirm(`Delete "${ws.name}"? This cannot be undone.`)) return;
+
+        const res = await fetch(`/api/workspaces/${ws.id}`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+
+        if (res.status === 204) {
+            setWorkspaces((prev) => prev.filter((w) => w.id !== ws.id));
+        }
+    };
+
     return (
         <div className="workspaces-container" style={{ padding: '0 4px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
             <div className="workspaces-header" style={{
@@ -22,9 +79,10 @@ const WorkspacesPage = ({ workspaces, onCreateClick, onOpenWorkspace }) => {
                         color: 'var(--muted)',
                         fontSize: '20px',
                         margin: 0
-                    }}> - Manage and organize your topics.</span>
+                    }}>- Manage and organize your topics.</span>
                 </div>
             </div>
+
             <div>
                 <button
                     className="btn btn-primary"
@@ -36,9 +94,14 @@ const WorkspacesPage = ({ workspaces, onCreateClick, onOpenWorkspace }) => {
                         <path d="M5 12h14"></path>
                     </svg>
                     New Topic
-                </button></div>
+                </button>
+            </div>
 
-            {workspaces.length === 0 ? (
+            {loading ? (
+                <div style={{ marginTop: '40px', textAlign: 'center', color: 'var(--muted)', fontSize: '14px' }}>
+                    Loading workspaces…
+                </div>
+            ) : workspaces.length === 0 ? (
                 <div className="empty-state" style={{
                     marginTop: '30px',
                     display: 'flex',
@@ -76,23 +139,27 @@ const WorkspacesPage = ({ workspaces, onCreateClick, onOpenWorkspace }) => {
                 <div className="workspaces-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                    gap: '16px'
+                    gap: '16px',
+                    marginTop: '20px',
                 }}>
                     {workspaces.map((ws) => (
-                        <div key={ws.id} className="workspace-card" style={{
-                            background: 'rgba(255,255,255,0.8)',
-                            borderRadius: 'var(--r-md)',
-                            border: '1px solid rgba(255,255,255,0.6)',
-                            boxShadow: 'var(--shadow-sm)',
-                            padding: '16px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '12px',
-                            transition: 'transform var(--t), box-shadow var(--t)',
-                            cursor: 'pointer',
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }}
+                        <div
+                            key={ws.id}
+                            className="workspace-card"
+                            style={{
+                                background: 'rgba(255,255,255,0.8)',
+                                borderRadius: 'var(--r-md)',
+                                border: '1px solid rgba(255,255,255,0.6)',
+                                boxShadow: 'var(--shadow-sm)',
+                                padding: '16px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '12px',
+                                transition: 'transform var(--t), box-shadow var(--t)',
+                                cursor: 'pointer',
+                                position: 'relative',
+                                overflow: 'hidden'
+                            }}
                             onClick={() => onOpenWorkspace(ws.id)}
                             onMouseEnter={(e) => {
                                 e.currentTarget.style.transform = 'translateY(-2px)';
@@ -123,7 +190,8 @@ const WorkspacesPage = ({ workspaces, onCreateClick, onOpenWorkspace }) => {
                                     <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
                                 </svg>
                             </div>
-                            <div>
+
+                            <div style={{ flex: 1, minWidth: 0 }}>
                                 <h3 style={{
                                     fontSize: '16px',
                                     fontWeight: '600',
@@ -137,7 +205,45 @@ const WorkspacesPage = ({ workspaces, onCreateClick, onOpenWorkspace }) => {
                                     fontSize: '13px',
                                     color: 'var(--muted)',
                                     margin: 0
-                                }}>Last edited just now</p>
+                                }}>
+                                    {new Date(ws.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                                <button
+                                    onClick={(e) => handleRename(ws, e)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '6px 10px',
+                                        fontSize: '12px',
+                                        fontWeight: 500,
+                                        borderRadius: '6px',
+                                        border: '1px solid rgba(15,23,42,0.12)',
+                                        background: 'rgba(255,255,255,0.7)',
+                                        color: 'var(--accent)',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Rename
+                                </button>
+                                <button
+                                    onClick={(e) => handleDelete(ws, e)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '6px 10px',
+                                        fontSize: '12px',
+                                        fontWeight: 500,
+                                        borderRadius: '6px',
+                                        border: '1px solid rgba(239,68,68,0.2)',
+                                        background: 'rgba(239,68,68,0.05)',
+                                        color: '#ef4444',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Delete
+                                </button>
                             </div>
                         </div>
                     ))}
