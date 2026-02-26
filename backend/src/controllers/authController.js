@@ -347,7 +347,8 @@ export const login = asyncHandler(async (req, res) => {
         return res.status(401).json({ status: 'error', message: 'Invalid email or password.' });
     }
 
-    const accessToken = signAccessToken({ id: user.id, email: user.email });
+    // CRITICAL FIX: Pass the entire user object including accountVersion to signAccessToken
+    const accessToken = signAccessToken(user);
     setAccessCookie(res, accessToken);
 
     const rawRefreshToken = generateRefreshToken();

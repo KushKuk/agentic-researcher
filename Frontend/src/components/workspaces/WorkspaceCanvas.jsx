@@ -23,125 +23,93 @@ const nodeTypes = {
     citationCard: CitationNodeCard
 };
 
-// Mock data structured into nodes
-const initialNodes = [
-    {
-        id: 'lit-review',
-        type: 'reportCard',
-        position: { x: 50, y: 50 },
-        data: {
-            title: 'Literature Review',
-            summary: 'Analyzing the trajectory of quantum AI models reveals a convergence point between deep neural processing and cryptographic acceleration.',
-            citations: [
-                {
-                    source: 'Quantum Computing: A New Era',
-                    snippet: 'Section 2.1: Historical topologies show significant bottlenecks in matrix multiplication that Qubits can solve...'
-                },
-                {
-                    source: 'Advances in Neural Networks',
-                    snippet: 'Page 40: Sparse activations are only a band-aid before hardware transitions to non-von Neumann architectures.'
-                }
-            ]
-        },
-    },
-    {
-        id: 'core-findings',
-        type: 'reportCard',
-        position: { x: 500, y: 150 },
-        data: {
-            title: 'Core Findings',
-            summary: 'The primary hypothesis regarding energy efficiency was proven true in controlled environments.',
-            citations: [
-                {
-                    source: 'The Future of AI Research',
-                    snippet: 'Table 4: Energy consumption drops by 40% when utilizing dedicated neuromorphic processors.'
-                }
-            ]
-        },
-    },
-    {
-        id: 'common-points',
-        type: 'reportCard',
-        position: { x: 50, y: 450 },
-        data: {
-            title: 'Common Points Discovered',
-            summary: 'All three papers consistently highlight the "Moore\'s Law Plateau" as the driving factor for recent architectural shifts.',
-            citations: [
-                {
-                    source: 'Advances in Neural Networks',
-                    snippet: 'Conclusion: The physical limits of silicon gating have been reached.'
-                },
-                {
-                    source: 'The Future of AI Research',
-                    snippet: '...suggesting that software engineering now bears the burden previously carried by hardware miniaturization.'
-                }
-            ]
-        },
-    },
-    {
-        id: 'key-takeaways',
-        type: 'reportCard',
-        position: { x: 950, y: 50 },
-        data: {
-            title: 'Key Takeaways',
-            summary: 'Researchers must pivot toward hybrid models. Pure classical deep learning is no longer a viable long-term research vector for massive datasets.',
-            citations: []
-        },
-    },
-];
-
-const initialEdges = [
-    { id: 'e-lit-core', source: 'lit-review', target: 'core-findings', animated: true, style: { stroke: 'rgba(0, 148, 54, 0.4)', strokeWidth: 2 } },
-    { id: 'e-lit-common', source: 'lit-review', target: 'common-points', animated: true, style: { stroke: 'rgba(0, 148, 54, 0.4)', strokeWidth: 2 } },
-    { id: 'e-core-key', source: 'core-findings', target: 'key-takeaways', animated: true, style: { stroke: 'rgba(0, 148, 54, 0.4)', strokeWidth: 2 } },
-];
-
-const STORAGE_KEY = 'agentic_researcher_canvas_data';
-
-// Workspace ID must be passed as a prop once backend integration is live.
-// For now, it is read from the prop and savves are no-ops if absent.
+// Workspace ID acts as the unique identifier for fetching backend state.
 const WorkspaceCanvas = ({ onBack, workspaceId }) => {
-    // Lazily initialize state from LocalStorage if it exists
-    const [nodes, setNodes, onNodesChange] = useNodesState(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (parsed.nodes && parsed.nodes.length > 0) return parsed.nodes;
-            } catch (e) {
-                console.error('Error parsing canvas data from local storage', e);
-            }
-        }
-        return initialNodes;
-    });
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-    const [edges, setEdges, onEdgesChange] = useEdgesState(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (parsed.edges) return parsed.edges;
-            } catch (e) { }
-        }
-        return initialEdges;
-    });
+    const [isLoading, setIsLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(false);
+    const [metadata, setMetadata] = useState(null);
+    const workspaceIdRef = useRef(workspaceId);
+
+    useEffect(() => {
+        workspaceIdRef.current = workspaceId;
+    }, [workspaceId]);
 
     // History Hook
     const { takeSnapshot, undo, redo, canUndo, canRedo } = useHistory();
 
-    // ── Autosave: single-slot queue model ──────────────────────────────────
+    // ── State for Autosave & Network ───────────────────────────────────────
     const [isSaving, setIsSaving] = useState(false);
     const [hasPendingSave, setHasPendingSave] = useState(false);
     const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'conflict' | null
-    const latestStateRef = useRef({ nodes: [], edges: [], version: 1 });
-    const isSavingRef = useRef(false);       // mirrors isSaving without stale-closure issues
-    const hasPendingRef = useRef(false);     // mirrors hasPendingSave
 
-    // Keep version in a ref so saveCanvas always reads the latest value
-    const versionRef = useRef(1);
+    const versionRef = useRef(undefined);
+    const latestStateRef = useRef({ nodes: [], edges: [], version: versionRef.current });
+    const isSavingRef = useRef(false);
+    const hasPendingRef = useRef(false);
 
+    // ── Hydration ─────────────────────────────────────────────────────────
+    useEffect(() => {
+        setNodes([]);
+        setEdges([]);
+        versionRef.current = undefined;
+        isSavingRef.current = false;
+        hasPendingRef.current = false;
+        setSaveStatus(null);
+        setMetadata(null);
+        setFetchError(false);
+        setIsLoading(true);
+
+        if (!workspaceId) {
+            setIsLoading(false);
+            return;
+        }
+
+        const abortController = new AbortController();
+
+        const fetchCanvas = async () => {
+            try {
+                const res = await fetch(`/api/workspaces/${workspaceId}/canvas`, {
+                    signal: abortController.signal,
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                if (!res.ok) throw new Error('Failed to fetch canvas');
+
+                const json = await res.json();
+
+                setNodes(json.data.nodes || []);
+                setEdges(json.data.edges || []);
+                versionRef.current = json.data.version;
+                if (json.metadata) setMetadata(json.metadata);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Canvas hydration error:', err);
+                    setFetchError(true);
+                }
+            } finally {
+                if (!abortController.signal.aborted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        fetchCanvas();
+
+        return () => {
+            abortController.abort();
+        };
+    }, [workspaceId, setNodes, setEdges]);
+
+    // ── Autosave: single-slot queue model ──────────────────────────────────
     const saveCanvas = useCallback(async () => {
-        if (!workspaceId) return;            // no-op until backend is wired
+        if (isLoading) return;
+        if (typeof versionRef.current !== 'number') return;
+        if (!workspaceId) return;
+        if (workspaceId !== workspaceIdRef.current) return;
 
         if (isSavingRef.current) {
             hasPendingRef.current = true;
@@ -165,17 +133,23 @@ const WorkspaceCanvas = ({ onBack, workspaceId }) => {
             const json = await res.json();
 
             if (res.ok) {
-                // Update version from server response
                 versionRef.current = json.data.version;
+                if (json.metadata) setMetadata(json.metadata);
                 setSaveStatus('saved');
                 setTimeout(() => setSaveStatus(null), 2000);
             } else if (res.status === 409) {
-                // Version conflict: replace local state with server's authoritative state
+                // 409 Conflict: Structural version alignment, immediately retry local draft
                 versionRef.current = json.data.version;
-                setNodes(json.data.nodes);
-                setEdges(json.data.edges);
+
+                // Do NOT invoke setNodes(json.data.nodes) unless strictly necessary, 
+                // the local latestStateRef represents user's intended state (Last-Write-Wins).
+
                 setSaveStatus('conflict');
                 setTimeout(() => setSaveStatus(null), 3000);
+
+                // Queue another save immediately to overwrite server with local draft
+                hasPendingRef.current = true;
+                setHasPendingSave(true);
             }
             // 400 / 500 are silently ignored per spec (no logging yet)
         } catch (_err) {
@@ -190,7 +164,7 @@ const WorkspaceCanvas = ({ onBack, workspaceId }) => {
                 saveCanvas();
             }
         }
-    }, [workspaceId]); // setNodes/setEdges are stable refs from useNodesState/useEdgesState
+    }, [workspaceId, isLoading]); // setNodes/setEdges are stable refs from useNodesState/useEdgesState
 
     // Keep latestStateRef in sync on every render (no extra re-render cost)
     useEffect(() => {
@@ -199,16 +173,11 @@ const WorkspaceCanvas = ({ onBack, workspaceId }) => {
 
     // Debounced autosave — fires 800ms after nodes/edges settle
     useEffect(() => {
-        const timer = setTimeout(() => saveCanvas(), 800);
+        const timer = setTimeout(() => {
+            if (!isLoading) saveCanvas();
+        }, 800);
         return () => clearTimeout(timer);
-    }, [nodes, edges, saveCanvas]);
-
-    // Legacy localStorage persistence (kept alongside backend save)
-    useEffect(() => {
-        if (nodes.length > 0) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges }));
-        }
-    }, [nodes, edges]);
+    }, [nodes, edges, saveCanvas, isLoading]);
 
     const onConnect = useCallback(
         (params) => {
@@ -487,50 +456,82 @@ const WorkspaceCanvas = ({ onBack, workspaceId }) => {
                         </label>
                     </div>
                 </div>
+                {fetchError ? (
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(248, 250, 252, 0.7)', backdropFilter: 'blur(4px)' }}>
+                        <div style={{ padding: '16px 24px', background: '#fef2f2', border: '1px solid #f87171', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontWeight: 500, color: '#991b1b', display: 'flex', alignItems: 'center' }}>
+                            ⚠ Failed to load workspace. Please refresh the page.
+                        </div>
+                    </div>
+                ) : isLoading ? (
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(248, 250, 252, 0.7)', backdropFilter: 'blur(4px)' }}>
+                        <div style={{ padding: '16px 24px', background: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center' }}>
+                            <svg className="spinner" style={{ width: '20px', height: '20px', marginRight: '10px', animation: 'spin 1s linear infinite' }} viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                            <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+                            Loading workspace...
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <ReactFlow
+                            nodes={nodes}
+                            edges={edges}
+                            onNodesChange={onNodesChange}
+                            onEdgesChange={onEdgesChange}
+                            onConnect={onConnect}
+                            onNodeDragStart={onNodeDragStart}
+                            onNodeDragStop={onNodeDragStop}
+                            onNodesDelete={onNodesDelete}
+                            nodeTypes={nodeTypes}
+                            onInit={setRfInstance}
+                            onDrop={onDrop}
+                            onDragOver={onDragOver}
+                            snapToGrid={isGridSnapping}
+                            snapGrid={[20, 20]}
+                            fitView
+                            attributionPosition="bottom-left"
+                            minZoom={0.2}
+                            maxZoom={2}
+                            style={{ width: '100%', height: '100%' }}
+                        >
+                            <Background color="#0f172a" gap={20} size={1} opacity={0.1} />
+                            <Controls
+                                style={{
+                                    boxShadow: '0 10px 24px rgba(2, 6, 23, .08)',
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    border: '1px solid rgba(15,23,42,0.1)'
+                                }}
+                            />
+                            <MiniMap
+                                nodeColor={(n) => {
+                                    if (n.type === 'groupCard') return 'rgba(15, 23, 42, 0.1)';
+                                    return 'rgba(0, 148, 54, 0.4)';
+                                }}
+                                nodeBorderRadius={8}
+                                style={{
+                                    borderRadius: '16px',
+                                    border: '1px solid rgba(15,23,42,0.1)',
+                                    boxShadow: '0 10px 24px rgba(2, 6, 23, .08)'
+                                }}
+                            />
+                        </ReactFlow>
 
-                <ReactFlow
-                    nodes={nodes}
-                    edges={edges}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    onConnect={onConnect}
-                    onNodeDragStart={onNodeDragStart}
-                    onNodeDragStop={onNodeDragStop}
-                    onNodesDelete={onNodesDelete}
-                    nodeTypes={nodeTypes}
-                    onInit={setRfInstance}
-                    onDrop={onDrop}
-                    onDragOver={onDragOver}
-                    snapToGrid={isGridSnapping}
-                    snapGrid={[20, 20]}
-                    fitView
-                    attributionPosition="bottom-left"
-                    minZoom={0.2}
-                    maxZoom={2}
-                    style={{ width: '100%', height: '100%' }}
-                >
-                    <Background color="#0f172a" gap={20} size={1} opacity={0.1} />
-                    <Controls
-                        style={{
-                            boxShadow: '0 10px 24px rgba(2, 6, 23, .08)',
-                            borderRadius: '12px',
-                            overflow: 'hidden',
-                            border: '1px solid rgba(15,23,42,0.1)'
-                        }}
-                    />
-                    <MiniMap
-                        nodeColor={(n) => {
-                            if (n.type === 'groupCard') return 'rgba(15, 23, 42, 0.1)';
-                            return 'rgba(0, 148, 54, 0.4)';
-                        }}
-                        nodeBorderRadius={8}
-                        style={{
-                            borderRadius: '16px',
-                            border: '1px solid rgba(15,23,42,0.1)',
-                            boxShadow: '0 10px 24px rgba(2, 6, 23, .08)'
-                        }}
-                    />
-                </ReactFlow>
+                        {metadata && (
+                            <div style={{ position: 'absolute', bottom: '16px', right: '16px', zIndex: 10, fontSize: '11px', color: 'rgba(15,23,42,0.6)', background: 'rgba(255,255,255,0.7)', padding: '4px 8px', borderRadius: '4px', backdropFilter: 'blur(4px)', border: '1px solid rgba(15,23,42,0.1)' }}>
+                                Last updated {new Date(metadata.updatedAt).toLocaleTimeString()}
+                            </div>
+                        )}
+                    </>
+                )}
 
                 <Modal
                     isOpen={deleteModalOpen}
@@ -550,7 +551,7 @@ const WorkspaceCanvas = ({ onBack, workspaceId }) => {
                     </div>
                 </Modal>
             </div>
-        </ReactFlowProvider>
+        </ReactFlowProvider >
     );
 };
 

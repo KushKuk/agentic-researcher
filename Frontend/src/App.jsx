@@ -42,8 +42,7 @@ function App() {
     const [workspaceName, setWorkspaceName] = useState('');
     const [researchState, setResearchState] = useState('idle'); // 'idle' | 'input' | 'complete'
 
-    // State for workspaces list
-    const [workspaces, setWorkspaces] = useState([]);
+    const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
 
     const wsNameInputRef = useRef(null);
 
@@ -79,7 +78,7 @@ function App() {
         }
     };
 
-    const handleConfirmCreate = () => {
+    const handleConfirmCreate = async () => {
         if (!workspaceName.trim()) {
             showToast('Name needed', 'Add a workspace name to continue.');
             if (wsNameInputRef.current) {
@@ -97,35 +96,63 @@ function App() {
             return;
         }
 
-        // Add new workspace
-        const newWorkspace = {
-            id: Date.now().toString(),
-            name: workspaceName.trim(),
-            createdAt: new Date().toISOString()
-        };
-        setWorkspaces(prev => [newWorkspace, ...prev]);
+        try {
+            const res = await fetch('/api/workspaces', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: workspaceName.trim() }),
+                credentials: 'include'
+            });
 
-        setModalOpen(false);
-        showToast(
-            'Workspace ready',
-            `Created research topic: “${workspaceName.trim()}”.`
-        );
-        // Switch to workspaces tab to see the new item
-        setActiveTab('workspaces');
+            if (res.ok) {
+                const json = await res.json();
+                setModalOpen(false);
+                showToast('Workspace ready', `Created research topic: “${json.data.name}”.`);
+                setActiveWorkspaceId(json.data.id);
+                setActiveTab('workspace-canvas');
+                setWorkspaceName('');
+            } else if (res.status === 409) {
+                showToast('Error', 'Workspace name already exists.');
+            } else {
+                showToast('Error', 'Failed to create workspace.');
+            }
+        } catch (error) {
+            console.error('Create workspace error:', error);
+            showToast('Error', 'Failed to connect to server.');
+        }
     };
 
     const handleOpenWorkspace = (id) => {
         console.log('Open workspace:', id);
-        // Future: Navigate to workspace detail / flow editor
+        setActiveWorkspaceId(id);
+        setActiveTab('workspace-canvas');
     };
 
-    const handleResearchSubmit = (query) => {
-        // Simulate loading then switching to complete
+    const handleResearchSubmit = async (query) => {
         setToast({ show: true, title: 'Extracting data', desc: 'Analyzing sources and generating report...' });
-        setTimeout(() => {
-            setResearchState('complete');
-            setToast({ show: false, title: '', desc: '' });
-        }, 800);
+
+        try {
+            const res = await fetch('/api/workspaces', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: query }),
+                credentials: 'include'
+            });
+
+            if (res.ok) {
+                const json = await res.json();
+                setActiveWorkspaceId(json.data.id);
+                setResearchState('complete');
+                setToast({ show: false, title: '', desc: '' });
+            } else {
+                setToast({ show: true, title: 'Error', desc: 'Failed to create workspace from query.' });
+                setTimeout(() => setToast({ show: false, title: '', desc: '' }), 3000);
+            }
+        } catch (error) {
+            console.error('Research submit error:', error);
+            setToast({ show: true, title: 'Error', desc: 'Failed to connect to server.' });
+            setTimeout(() => setToast({ show: false, title: '', desc: '' }), 3000);
+        }
     };
 
     const handleEnterWorkspaceFromSummary = () => {
@@ -193,7 +220,6 @@ function App() {
 
                     {activeTab === 'workspaces' && (
                         <WorkspacesPage
-                            workspaces={workspaces}
                             onCreateClick={handleCreateClick}
                             onOpenWorkspace={handleOpenWorkspace}
                         />
@@ -202,9 +228,9 @@ function App() {
                     {activeTab === 'settings' && (
                         <SettingsPage />
                     )}
-                    {activeTab === 'workspace-canvas' && (
+                    {activeTab === 'workspace-canvas' && activeWorkspaceId && (
                         <div style={{ flex: 1, padding: '5px', height: '100%', width: '100%' }}>
-                            <WorkspaceCanvas onBack={() => setActiveTab('workspaces')} />
+                            <WorkspaceCanvas workspaceId={activeWorkspaceId} onBack={() => setActiveTab('workspaces')} />
                         </div>
                     )}
                 </main>
